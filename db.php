@@ -45,7 +45,24 @@ try {
 function resolveIconUrl($icon) {
     $icon = trim($icon);
     if (empty($icon)) return '';
-    if (preg_match('~^(https?://|data:|/|\\.\\./|\\./)~i', $icon) || strpos($icon, '/') !== false) { return htmlspecialchars($icon); }
-    return htmlspecialchars('icons/' . $icon);
+
+    // 1. Se for uma URL externa (http/https) ou imagem em Base64, retorna direto
+    if (preg_match('~^(https?://|data:)~i', $icon)) {
+        return htmlspecialchars($icon);
+    }
+
+    // 2. Remove barras no início e limpa o prefixo antigo "projetos/portal/" caso ele exista no banco
+    $iconClean = ltrim($icon, '/\\');
+    if (strpos($iconClean, 'projetos/portal/') === 0) {
+        $iconClean = substr($iconClean, strlen('projetos/portal/'));
+    }
+
+    // 3. Se for apenas o nome da imagem (ex: "gitea.png" sem barras), adiciona o "icons/" na frente
+    if (strpos($iconClean, '/') === false) {
+        $iconClean = 'icons/' . $iconClean;
+    }
+
+    // 4. Retorna o caminho estritamente relativo (ex: "icons/gitea.png")
+    return htmlspecialchars($iconClean);
 }
 ?>
