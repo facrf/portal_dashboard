@@ -42,10 +42,24 @@ try {
     die("Erro na conexão com o banco de dados: " . $e->getMessage());
 }
 
-function resolveIconUrl($icon) {
+ffunction resolveIconUrl($icon) {
     $icon = trim($icon);
     if (empty($icon)) return '';
-    if (preg_match('~^(https?://|data:|/|\\.\\./|\\./)~i', $icon) || strpos($icon, '/') !== false) { return htmlspecialchars($icon); }
-    return htmlspecialchars('icons/' . $icon);
+
+    // 1. URLs externas (http/https) ou imagens em Base64 passam direto
+    if (preg_match('~^(https?://|data:)~i', $icon)) {
+        return htmlspecialchars($icon);
+    }
+
+    // 2. Garante caminho relativo removendo qualquer barra inicial (/ ou \)
+    $cleanPath = ltrim($icon, '/\\');
+
+    // 3. Se for apenas o nome do arquivo (ex: "gitea.png"), direciona para a pasta "icons/"
+    if (strpos($cleanPath, 'icons/') !== 0 && strpos($cleanPath, '/') === false && strpos($cleanPath, '\\') === false) {
+        $cleanPath = 'icons/' . $cleanPath;
+    }
+
+    // 4. Retorna o caminho relativo puro (ex: "icons/gitea.png")
+    return htmlspecialchars($cleanPath);
 }
 ?>
