@@ -80,8 +80,15 @@ services:
     volumes:
       # Mapeie a pasta onde seu banco SQLite ficará salvo de forma persistente
       - /caminho/no/seu/servidor/database:/var/www/html/database
+      # Mapeia os icones personalizados .png , .jpg, etc.
+      - /caminho/no/seu/servidor/icons:/var/www/html/icons
     restart: unless-stopped
     
+
+
+```
+
+  
 
 ⚙️ Customização
 Toda a configuração é feita diretamente pela interface do painel de administração (ou manipulando diretamente o banco SQLite se você preferir a linha de comando).
