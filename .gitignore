@@ -1,0 +1,23 @@
+#Lixo do VS Code e editores
+.vscode/
+.idea/
+
+#Lixo de S.O.
+.DS_Store
+Thumbs.db
+
+#Ignorar banco de dados Locais
+*.db*.sqlite
+*.sql
+*.fdb
+*.mdb
+*.gdb
+*.fbk
+*.gbk
+
+# Ignorar arquivos de configuracao
+.env
+
+# Ignorar icones
+icons/
+/icons/
