@@ -60,11 +60,15 @@ Certifique-se de que o usuário do servidor web (ex: www-data) tenha permissão 
 
 Acesse através do seu navegador: http://localhost/portal_dashboard (ou o IP do seu servidor).
 
-Método 2: Docker (Opcional & Recomendado)
-(Se você preferir rodar isolado em um container)
 
-Crie um arquivo docker-compose.yml ou utilize o comando abaixo para subir o serviço rapidamente:
+### 🐳 Instalação com Docker Compose (Recomendado)
 
+Como a imagem do **Portal Dashboard** é compilada automaticamente e hospedada no GitHub Container Registry (GHCR), você não precisa clonar este repositório para rodar o projeto no seu servidor.
+
+1. Crie um arquivo chamado `docker-compose.yml` (ou crie uma nova **Stack** no seu Portainer).
+2. Cole o seguinte conteúdo:
+
+```yaml
 version: '3.8'
 
 services:
@@ -72,10 +76,10 @@ services:
     image: ghcr.io/facrf/portal_dashboard:latest
     container_name: portal_dashboard
     ports:
-      - "8080:80"
+      - "8080:80" # Porta onde o painel ficará acessível (mude se necessário)
     volumes:
-      # Exemplo salvando o banco de dados SQLite de forma persistente
-      - /storage/portal_dashboard/data:/var/www/html/data 
+      # Mapeie a pasta onde seu banco SQLite ficará salvo de forma persistente
+      - /caminho/no/seu/servidor/database:/var/www/html/database
     restart: unless-stopped
     
 
