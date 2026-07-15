@@ -1,4 +1,4 @@
-es_content = """# 🌐 Portal Dashboard
+## 🌐 Portal Dashboard
 
 > Un dashboard ligero, extremadamente personalizable y enfocado en la privacidad para tu Homelab / Homeserver.
 
@@ -116,4 +116,3 @@ Sube la rama (git push origin feature/nueva-caracteristica).
 Abre un Pull Request.
 
 Creado con ☕ por facrf.
-"""
