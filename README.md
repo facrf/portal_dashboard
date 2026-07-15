@@ -64,7 +64,7 @@ Acesse através do seu navegador: http://localhost/portal_dashboard (ou o IP do 
 
 ### 🐳 Instalação com Docker Compose (Recomendado)
 
-Como a imagem do **Portal Dashboard** é compilada automaticamente e hospedada no GitHub Container Registry (GHCR), você não precisa clonar este repositório para rodar o projeto no seu servidor.
+Como a imagem do **Portal Dashboard** é compilada automaticamente e hospedada no GitHub Container Registry (GHCR), você não precisa clonar este repositório para rodar o projeto no seu servidor, suporta amd64/arm64/arm32v7.
 
 1. Crie um arquivo chamado `docker-compose.yml` (ou crie uma nova **Stack** no seu Portainer).
 2. Cole o seguinte conteúdo:
