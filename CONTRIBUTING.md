@@ -6,7 +6,7 @@ Este projeto é um Dashboard customizável , com foco em simplicidade, clareza e
 As regras abaixo existem para manter o histórico organizado e o código legível.
 🎯 Objetivo do projeto
 
-    Manter um site pessoal estático e bem organizado
+    Manter um Dashboard com foco em nao ter telemetria e bem organizado
     Garantir clareza no histórico de alterações
     Facilitar manutenção e evolução futura
 
