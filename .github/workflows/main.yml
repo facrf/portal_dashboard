@@ -3,6 +3,22 @@ name: Build and Push Docker Image to GHCR
 on:
   push:
     branches: [ "main" ] # Dispara sempre que houver push na branch main
+    paths-ignore:
+      - '**/*.md'         # Ignora qualquer arquivo Markdown (como o README.md) em qualquer pasta
+      - 'LICENSE'         # Ignora alterações no arquivo de licença
+      - '.gitignore'      # Ignora o arquivo do git
+      - 'icons/**'        # Ignora tudo o que estiver dentro da pasta icons
+      - 'database/**'     # Ignora tudo o que estiver dentro da pasta database
+      - 'lang/**'         # Ignora tudo o que estiver dentro da pasta lang
+      # --- NOVOS FILTROS DE MÍDIA E DOCUMENTOS ---
+      - '**/*.png'        # Ignora arquivos PNG em qualquer pasta do projeto
+      - '**/*.jpg'        # Ignora arquivos JPG em qualquer pasta do projeto
+      - '**/*.jpeg'       # Ignora arquivos JPEG em qualquer pasta do projeto
+      - '**/*.ico'        # Ignora arquivos de ícone ICO em qualquer pasta
+      - '**/*.txt'        # Ignora arquivos de texto (.txt) como notas de desenvolvimento
+      # --- CUIDADO COM ESTES DOIS (LEIA OS AVISOS ABAIXO) ---
+      - '**/*.json'       # Ignora arquivos JSON de configuração
+      - '**/*.html'       # Ignora arquivos HTML puros
   release:
     types: [published] # Dispara quando criar uma nova Release/Tag
 
@@ -20,6 +36,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # 1. Configura o QEMU (Necessário para emular processadores ARM)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 2. Configura o Docker Buildx (Motor que cria imagens multi-arch)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -42,6 +66,8 @@ jobs:
         with:
           context: .
           push: true
+          # 3. A Mágica Acontece Aqui: Definindo as arquiteturas
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}      # corrigido
           labels: ${{ steps.meta.outputs.labels }}  # corrigido
           
