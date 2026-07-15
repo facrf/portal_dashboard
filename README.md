@@ -31,6 +31,7 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 ## 🛠️ Tecnologias Utilizadas
 
 * **Backend:** PHP (8.0+)
+* **Ninx**
 * **Banco de Dados:** SQLite 3
 * **Licença:** GNU GPL v3
 
