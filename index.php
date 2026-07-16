@@ -119,49 +119,73 @@ foreach ($toolsList as $tool) {
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            
-            // 1. Efeito PROC para o botão salvar do Bloco de Notas
-            const notesForm = document.querySelector('.notes-form');
-            if (notesForm) {
-                notesForm.addEventListener('input', () => {
-                    const btn = notesForm.querySelector('button[type="submit"]');
-                    if (btn && !btn.classList.contains('btn-glow')) {
-                        btn.classList.add('btn-glow');
-                    }
-                });
+    
+    // 1. Efeito PROC para o botão salvar do Bloco de Notas
+    const notesForm = document.querySelector('.notes-form');
+    if (notesForm) {
+        notesForm.addEventListener('input', () => {
+            const btn = notesForm.querySelector('button[type="submit"]');
+            if (btn && !btn.classList.contains('btn-glow')) {
+                btn.classList.add('btn-glow');
             }
-
-            // 2. Sistema de Checagem Assíncrona de Status (Ping)
-            const cards = document.querySelectorAll('.tool-card');
-            
-            // Pega as traduções do PHP e injeta no Javascript
-            const txtRunning = '<?= t('status_running') ?>';
-            const txtError = '<?= t('status_error') ?>';
-            
-            cards.forEach(card => {
-                const url = card.getAttribute('data-url');
-                const badge = card.querySelector('.status-badge');
-                const errorBlock = card.querySelector('.error-block');
-
-                fetch('ping.php?url=' + encodeURIComponent(url))
-                    .then(response => response.json())
-                    .then(data => {
-                        if(data.status === 'ok') {
-                            badge.textContent = txtRunning;
-                            badge.className = 'status-badge status-ok';
-                        } else {
-                            badge.textContent = txtError;
-                            badge.className = 'status-badge status-error';
-                            errorBlock.style.display = 'block'; 
-                        }
-                    })
-                    .catch(() => {
-                        badge.textContent = txtError;
-                        badge.className = 'status-badge status-error';
-                        errorBlock.style.display = 'block';
-                    });
-            });
         });
+    }
+
+    // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
+    const cards = document.querySelectorAll('.tool-card');
+    const txtRunning = '<?= t('status_running') ?>';
+    const txtError = '<?= t('status_error') ?>';
+    
+    cards.forEach(card => {
+        const urlStr = card.getAttribute('data-url').trim();
+        const badge = card.querySelector('.status-badge');
+        const errorBlock = card.querySelector('.error-block');
+
+        let queryUrl = '';
+
+        try {
+            // Tenta processar como URL válida
+            let urlObj = new URL(urlStr);
+            
+            // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
+            if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
+                queryUrl = `ping.php?host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
+            } else {
+                queryUrl = 'ping.php?url=' + encodeURIComponent(urlStr);
+            }
+        } catch (e) {
+            // Fallback caso seja apenas IP:PORTA sem "http://" cadastrado
+            const portMatch = urlStr.match(/:(\d+)$/);
+            if (portMatch) {
+                const parts = urlStr.split(':');
+                const host = parts[0].replace('//', '');
+                const port = portMatch[1];
+                queryUrl = `ping.php?host=${encodeURIComponent(host)}&port=${port}`;
+            } else {
+                queryUrl = 'ping.php?url=' + encodeURIComponent(urlStr);
+            }
+        }
+
+        fetch(queryUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    badge.textContent = txtRunning;
+                    badge.className = 'status-badge status-ok';
+                    errorBlock.style.display = 'none';
+                } else {
+                    badge.textContent = txtError;
+                    badge.className = 'status-badge status-error';
+                    errorBlock.style.display = 'block'; 
+                }
+            })
+            .catch(() => {
+                badge.textContent = txtError;
+                badge.className = 'status-badge status-error';
+                errorBlock.style.display = 'block';
+            });
+    });
+});
     </script>
 </body>
 </html>
