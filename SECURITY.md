@@ -8,8 +8,8 @@ Se você acredita ter encontrado uma vulnerabilidade de segurança no Portal Das
 
 Por favor, inclua as informações solicitadas listadas abaixo (o máximo que puder fornecer) para nos ajudar a entender melhor a natureza e o escopo do possível problema:
 
-1. **Tipo de problema**
-2. **Instruções passo a passo para reproduzir o problema**
+1.  **Tipo de problema**
+2.  **Instruções passo a passo para reproduzir o problema**
 3. **Prova de conceito (PoC) ou código de exploit** (se possível)
 4. **Impacto potencial do problema**, incluindo como um invasor poderia explorar a vulnerabilidade
 
