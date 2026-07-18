@@ -1,4 +1,5 @@
 :root {
+    color-scheme: dark; /* Avisa o navegador para usar UI nativa (scrollbars, selects) no modo escuro */
     font-family: system-ui, -apple-system, sans-serif;
     background-color: var(--bg-color);
     background-image: var(--bg-image);
@@ -89,7 +90,12 @@ body.light-theme .status-error, body.light-theme .error-block { background: rgba
 .form-group { margin-bottom: 1rem; display: flex; flex-direction: column; }
 .form-group label { margin-bottom: 0.5rem; font-weight: bold; font-size: 0.9rem;}
 .form-group input, .form-group textarea, .form-group select { padding: 0.8rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: #fff; font-family: inherit; }
-.form-group select option { background: #1e1e2e; color: #fff; }
+
+/* Correção da caixa de idiomas / select nativo */
+.form-group select option { 
+    background-color: var(--bg-color); 
+    color: var(--text-color); 
+}
 
 table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
@@ -111,6 +117,7 @@ th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,
 /* Modo Claro (Light Theme Overrides)          */
 /* ------------------------------------------- */
 body.light-theme {
+    color-scheme: light; /* Retorna UI nativa para o modo claro */
     --text-color: #2e3440 !important;
     background-color: rgba(240, 244, 248, 0.95); /* Fundo claro por cima da imagem */
     color: var(--text-color);
@@ -125,6 +132,9 @@ body.light-theme .form-group input, body.light-theme .form-group textarea, body.
 body.light-theme table th, body.light-theme table td, body.light-theme .category-column h2 { border-color: rgba(0, 0, 0, 0.1); }
 body.light-theme input[type="color"]::-webkit-color-swatch { border-color: rgba(0,0,0,0.3); }
 
+/* Corrige dropdown no modo claro caso o OS force inversão */
+body.light-theme .form-group select option { background-color: #ffffff; color: var(--text-color); }
+
 /* Animação do botão no modo claro */
 body.light-theme .toggle-slot { background: rgba(0, 0, 0, 0.1); border-color: rgba(0, 0, 0, 0.2); }
 body.light-theme .toggle-button { transform: translateX(20px); background: #2e3440; }
@@ -137,8 +147,6 @@ body.light-theme .toggle-button { transform: translateX(20px); background: #2e34
     50% { box-shadow: 0 0 20px #ffee55, inset 0 0 10px #ffee55; border-color: #ffffff; }
     100% { box-shadow: 0 0 5px #ffcc00, inset 0 0 5px #ffcc00; border-color: #ffaa00; }
 }
-
-
 
 .btn-glow {
     animation: spellProc 1.2s infinite !important;

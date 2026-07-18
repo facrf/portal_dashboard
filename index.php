@@ -2,6 +2,105 @@
 // index.php
 require_once 'db.php';
 
+// ==========================================
+// CLASSE PINGER INTEGRADA (Substitui ping.php)
+// ==========================================
+class Pinger {
+    /**
+     * Envia uma requisição UDP real para validar se o Servidor NTP está online.
+     * Envia um pacote de 48 bytes (padrão do protocolo NTP) e aguarda resposta.
+     */
+    private static function testNtpServer($host, $port = 123) {
+        $fp = @fsockopen("udp://$host", $port, $errno, $errstr, 1.5);
+        if (!$fp) return false;
+
+        stream_set_timeout($fp, 1, 500000);
+        $packet = "\x1b" . str_repeat("\0", 47);
+        $write = @fwrite($fp, $packet);
+        
+        if ($write === false) { 
+            fclose($fp); 
+            return false; 
+        }
+
+        $response = @fread($fp, 48);
+        fclose($fp);
+
+        return (!empty($response) && strlen($response) >= 48);
+    }
+
+    /**
+     * Executa a checagem com base nos parâmetros GET
+     */
+    public static function check($params) {
+        // 1. Método de teste para portas (Bancos de dados, NTP, etc.)
+        if (isset($params['host']) && isset($params['port'])) {
+            $host = filter_var($params['host'], FILTER_SANITIZE_URL);
+            $port = intval($params['port']);
+
+            // Limpa possíveis protocolos inseridos no host
+            $host = preg_replace('~^https?://~i', '', $host);
+            $host = preg_replace('~^udp://~i', '', $host);
+
+            if (!empty($host) && $port > 0) {
+                if ($port === 123) {
+                    return self::testNtpServer($host, $port);
+                } else {
+                    // Teste padrão TCP para portas de Bancos de Dados, etc.
+                    $connection = @fsockopen($host, $port, $errno, $errstr, 1.5);
+                    if (is_resource($connection)) {
+                        fclose($connection);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 2. Método padrão: teste HTTP HEAD (Para sites e web apps normais)
+        if (isset($params['url'])) {
+            $url = filter_var($params['url'], FILTER_SANITIZE_URL);
+            if ($url) {
+                $context = stream_context_create([
+                    'http' => [
+                        'method' => 'HEAD',
+                        'timeout' => 2,
+                        'ignore_errors' => true
+                    ],
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false
+                    ]
+                ]);
+
+                $headers = @get_headers($url, 1, $context);
+                if ($headers !== false) {
+                    preg_match('/HTTP\/\d(?:\.\d)?\s+(\d+)/', $headers[0], $matches);
+                    $code = isset($matches[1]) ? intval($matches[1]) : 0;
+                    if ($code > 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+}
+
+// ==========================================
+// INTERCEPTADOR DE PING (AJAX API)
+// ==========================================
+if (isset($_GET['action']) && $_GET['action'] === 'ping') {
+    header('Content-Type: application/json');
+    $isOnline = Pinger::check($_GET);
+    echo json_encode(['status' => $isOnline ? 'ok' : 'error']);
+    exit;
+}
+
+// ==========================================
+// LÓGICA PADRÃO DA PÁGINA
+// ==========================================
+
 // Salva o texto do bloco de notas do rodapé
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_footer') {
     $stmt = $pdo->prepare("UPDATE settings SET footer_text = ? WHERE id = 1");
@@ -120,72 +219,73 @@ foreach ($toolsList as $tool) {
     <script>
         document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. Efeito PROC para o botão salvar do Bloco de Notas
-    const notesForm = document.querySelector('.notes-form');
-    if (notesForm) {
-        notesForm.addEventListener('input', () => {
-            const btn = notesForm.querySelector('button[type="submit"]');
-            if (btn && !btn.classList.contains('btn-glow')) {
-                btn.classList.add('btn-glow');
+            // 1. Efeito PROC para o botão salvar do Bloco de Notas
+            const notesForm = document.querySelector('.notes-form');
+            if (notesForm) {
+                notesForm.addEventListener('input', () => {
+                    const btn = notesForm.querySelector('button[type="submit"]');
+                    if (btn && !btn.classList.contains('btn-glow')) {
+                        btn.classList.add('btn-glow');
+                    }
+                });
             }
-        });
-    }
 
-    // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
-    const cards = document.querySelectorAll('.tool-card');
-    const txtRunning = '<?= t('status_running') ?>';
-    const txtError = '<?= t('status_error') ?>';
-    
-    cards.forEach(card => {
-        const urlStr = card.getAttribute('data-url').trim();
-        const badge = card.querySelector('.status-badge');
-        const errorBlock = card.querySelector('.error-block');
-
-        let queryUrl = '';
-
-        try {
-            // Tenta processar como URL válida
-            let urlObj = new URL(urlStr);
+            // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
+            const cards = document.querySelectorAll('.tool-card');
+            const txtRunning = '<?= t('status_running') ?>';
+            const txtError = '<?= t('status_error') ?>';
             
-            // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
-            if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
-                queryUrl = `ping.php?host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
-            } else {
-                queryUrl = 'ping.php?url=' + encodeURIComponent(urlStr);
-            }
-        } catch (e) {
-            // Fallback caso seja apenas IP:PORTA sem "http://" cadastrado
-            const portMatch = urlStr.match(/:(\d+)$/);
-            if (portMatch) {
-                const parts = urlStr.split(':');
-                const host = parts[0].replace('//', '');
-                const port = portMatch[1];
-                queryUrl = `ping.php?host=${encodeURIComponent(host)}&port=${port}`;
-            } else {
-                queryUrl = 'ping.php?url=' + encodeURIComponent(urlStr);
-            }
-        }
+            cards.forEach(card => {
+                const urlStr = card.getAttribute('data-url').trim();
+                const badge = card.querySelector('.status-badge');
+                const errorBlock = card.querySelector('.error-block');
 
-        fetch(queryUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    badge.textContent = txtRunning;
-                    badge.className = 'status-badge status-ok';
-                    errorBlock.style.display = 'none';
-                } else {
-                    badge.textContent = txtError;
-                    badge.className = 'status-badge status-error';
-                    errorBlock.style.display = 'block'; 
+                let queryUrl = '';
+
+                try {
+                    // Tenta processar como URL válida
+                    let urlObj = new URL(urlStr);
+                    
+                    // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
+                    // Usa action=ping no index.php agora
+                    if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
+                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
+                    } else {
+                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
+                    }
+                } catch (e) {
+                    // Fallback caso seja apenas IP:PORTA sem "http://" cadastrado
+                    const portMatch = urlStr.match(/:(\d+)$/);
+                    if (portMatch) {
+                        const parts = urlStr.split(':');
+                        const host = parts[0].replace('//', '');
+                        const port = portMatch[1];
+                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(host)}&port=${port}`;
+                    } else {
+                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
+                    }
                 }
-            })
-            .catch(() => {
-                badge.textContent = txtError;
-                badge.className = 'status-badge status-error';
-                errorBlock.style.display = 'block';
+
+                fetch(queryUrl)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            badge.textContent = txtRunning;
+                            badge.className = 'status-badge status-ok';
+                            errorBlock.style.display = 'none';
+                        } else {
+                            badge.textContent = txtError;
+                            badge.className = 'status-badge status-error';
+                            errorBlock.style.display = 'block'; 
+                        }
+                    })
+                    .catch(() => {
+                        badge.textContent = txtError;
+                        badge.className = 'status-badge status-error';
+                        errorBlock.style.display = 'block';
+                    });
             });
-    });
-});
+        });
     </script>
 </body>
 </html>
