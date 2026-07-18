@@ -1,8 +1,8 @@
 <?php
 return [
     'dashboard' => 'Dashboard',
-    'settings' => 'Configurações',
-    'appearance_tabs' => 'Aparência & Abas',
+    'settings' => 'Administração',
+    'appearance_tabs' => 'Configuração',
     'manage_services' => 'Gerenciar Serviços',
     'add_service' => 'Adicionar Serviço',
     'edit' => 'Editar',
@@ -13,5 +13,6 @@ return [
     'notes' => 'Bloco de Notas / Anotações',
     'save_notes' => 'Salvar Anotações',
     'status_running' => 'RODANDO',
-    'status_error' => 'ERRO'
+    'status_error' => 'ERRO',
+    'logout' => 'Sair'
 ];

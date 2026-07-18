@@ -88,10 +88,32 @@ class Pinger {
 }
 
 // ==========================================
-// INTERCEPTADOR DE PING (AJAX API)
+// INTERCEPTADOR DE PING (AJAX API) - PROTEGIDO CONTRA SSRF
 // ==========================================
 if (isset($_GET['action']) && $_GET['action'] === 'ping') {
     header('Content-Type: application/json');
+
+    // PROTEÇÃO CONTRA SSRF: Lista Branca baseada no banco de dados
+    $isAllowed = false;
+    
+    if (!empty($_GET['url'])) {
+        // Só permite se a exata URL existir nos cadastros
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url = ?");
+        $stmt->execute([$_GET['url']]);
+        $isAllowed = $stmt->fetchColumn() > 0;
+    } elseif (!empty($_GET['host'])) {
+        // Se for IP/Host + Porta, verifica se o host faz parte de alguma URL cadastrada
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url LIKE ?");
+        $stmt->execute(['%' . $_GET['host'] . '%']);
+        $isAllowed = $stmt->fetchColumn() > 0;
+    }
+
+    if (!$isAllowed) {
+        // Se o atacante tentar pingar um IP/Porta interno não mapeado no painel, bloqueia.
+        echo json_encode(['status' => 'error', 'msg' => 'Alvo não cadastrado.']);
+        exit;
+    }
+
     $isOnline = Pinger::check($_GET);
     echo json_encode(['status' => $isOnline ? 'ok' : 'error']);
     exit;
@@ -101,8 +123,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
 // LÓGICA PADRÃO DA PÁGINA
 // ==========================================
 
-// Salva o texto do bloco de notas do rodapé
+// Salva o texto do bloco de notas do rodapé - PROTEGIDO CONTRA CSRF
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_footer') {
+    
+    // Validação de segurança Anti-CSRF
+    if (empty($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Requisição inválida.");
+    }
+
     $stmt = $pdo->prepare("UPDATE settings SET footer_text = ? WHERE id = 1");
     $stmt->execute([$_POST['footer_text']]);
     header("Location: index.php");
@@ -110,7 +138,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
-$bgImageStyle = !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image']) . "')" : 'none';
+
+// Força ENT_QUOTES para barrar injeção de aspas simples no CSS
+$bgImageStyle = !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') . "')" : 'none';
 $currentLang = $settings['language'] ?? 'pt';
 
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
@@ -124,22 +154,26 @@ foreach ($toolsList as $tool) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLang) ?>">
+<html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($settings['portal_name']) ?></title>
+    
+    <!-- Bloqueia o vazamento de rastreamento do Referer para imagens e ícones externos -->
+    <meta name="referrer" content="no-referrer">
+    
+    <title><?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>
     
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
-        <link rel="icon" href="<?= $favicon ?>">
+        <link rel="icon" href="<?= htmlspecialchars($favicon, ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
     
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>
         :root {
-            --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>;
+            --bg-color: <?= htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') ?>;
             --bg-image: <?= $bgImageStyle ?>;
-            --text-color: <?= htmlspecialchars($settings['text_color']) ?>;
+            --text-color: <?= htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') ?>;
         }
     </style>
 </head>
@@ -153,7 +187,7 @@ foreach ($toolsList as $tool) {
     </script>
     <div class="container">
         <header>
-            <h1><?= htmlspecialchars($settings['portal_name']) ?></h1>
+            <h1><?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></h1>
             <div class="header-controls">
                 
                 <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Toggle Theme">
@@ -165,6 +199,11 @@ foreach ($toolsList as $tool) {
                 <div class="header-nav">
                     <a href="admin.php" class="btn"><?= t('settings') ?></a>
                     <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
+                   <form method="POST" action="login.php" style="display: inline; margin: 0;">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" class="btn btn-danger" style="margin-left: 10px;"><?= t('logout') ?></button>
+    </form>
                 </div>
             </div>
         </header>
@@ -174,23 +213,32 @@ foreach ($toolsList as $tool) {
                 if (empty($groupedTools[$cat['id']])) continue; 
             ?>
                 <div class="category-column">
-                    <h2><?= htmlspecialchars($cat['name']) ?></h2>
+                    <h2><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></h2>
                     <div class="category-items">
                         
-                        <?php foreach ($groupedTools[$cat['id']] as $tool): ?>
-                            <a href="<?= htmlspecialchars($tool['url']) ?>" class="card tool-card" target="_blank" data-url="<?= htmlspecialchars($tool['url']) ?>">
+                        <?php foreach ($groupedTools[$cat['id']] as $tool): 
+                            
+                            // 1. Sanitização contra URI javascript: e data: (Evita XSS)
+                            $safeUrl = $tool['url'];
+                            if (preg_match('/^\s*(javascript|vbscript|data):/i', $safeUrl)) {
+                                $safeUrl = '#blocked';
+                            }
+                            $safeUrl = htmlspecialchars($safeUrl, ENT_QUOTES, 'UTF-8');
+                        ?>
+                            <!-- 2. Adiciona rel="noopener noreferrer" para evitar Tabnabbing e Tracking -->
+                            <a href="<?= $safeUrl ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-url="<?= $safeUrl ?>">
                                 
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
                                     <?php $iconPath = resolveIconUrl($tool['icon_url']); if (!empty($iconPath)): ?>
-                                        <img src="<?= $iconPath ?>" alt="">
+                                        <img src="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>" alt="">
                                     <?php endif; ?>
                                     
                                     <div class="card-content">
-                                        <h3><?= htmlspecialchars($tool['name']) ?></h3>
+                                        <h3><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></h3>
                                         <?php if (!empty($tool['description'])): ?>
-                                            <p><?= htmlspecialchars($tool['description']) ?></p>
+                                            <p><?= htmlspecialchars($tool['description'], ENT_QUOTES, 'UTF-8') ?></p>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -209,8 +257,12 @@ foreach ($toolsList as $tool) {
         <footer class="notes-section">
             <form method="POST" class="notes-form">
                 <input type="hidden" name="action" value="update_footer">
+                
+                <!-- Token adicionado aqui (Proteção CSRF) -->
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                
                 <label for="footer_text"><?= t('notes') ?></label>
-                <textarea name="footer_text" id="footer_text" placeholder="..."><?= htmlspecialchars($settings['footer_text'] ?? '') ?></textarea>
+                <textarea name="footer_text" id="footer_text" placeholder="..."><?= htmlspecialchars($settings['footer_text'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
                 <button type="submit" class="btn"><?= t('save_notes') ?></button>
             </form>
         </footer>
@@ -232,8 +284,8 @@ foreach ($toolsList as $tool) {
 
             // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
             const cards = document.querySelectorAll('.tool-card');
-            const txtRunning = '<?= t('status_running') ?>';
-            const txtError = '<?= t('status_error') ?>';
+            const txtRunning = '<?= htmlspecialchars(t('status_running'), ENT_QUOTES, 'UTF-8') ?>';
+            const txtError = '<?= htmlspecialchars(t('status_error'), ENT_QUOTES, 'UTF-8') ?>';
             
             cards.forEach(card => {
                 const urlStr = card.getAttribute('data-url').trim();
@@ -247,7 +299,6 @@ foreach ($toolsList as $tool) {
                     let urlObj = new URL(urlStr);
                     
                     // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
-                    // Usa action=ping no index.php agora
                     if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
                         queryUrl = `index.php?action=ping&host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
                     } else {
@@ -264,6 +315,14 @@ foreach ($toolsList as $tool) {
                     } else {
                         queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
                     }
+                }
+
+                // Proteção extra no Front-End para não disparar ping em links bloqueados
+                if (urlStr === '#blocked') {
+                    badge.textContent = txtError;
+                    badge.className = 'status-badge status-error';
+                    errorBlock.style.display = 'block';
+                    return;
                 }
 
                 fetch(queryUrl)

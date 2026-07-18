@@ -2,18 +2,18 @@
 set -e
 
 # 1. Se a pasta de ícones mapeada pelo usuário estiver vazia,
-# copia os ícones padrão de volta para ela para não quebrar o layout
+# copia os ícones padrão de volta para ela para não quebrar o layout[cite: 2]
 if [ -z "$(ls -A /var/www/html/icons 2>/dev/null)" ]; then
     echo "Pasta de ícones vazia. Copiando ícones padrão..."
     cp -R /var/www/html/icons_default/. /var/www/html/icons/ 2>/dev/null || true
 fi
 
-# 2. Cria a nova pasta do banco caso o mapeamento do Docker não a crie a tempo
+# 2. Cria a nova pasta do banco caso o mapeamento do Docker não a crie a tempo[cite: 2]
 mkdir -p /var/www/db_data
 
-# 3. Garante permissões corretas para o Apache (www-data)
-# na nova pasta segura do banco e na pasta de ícones
+# 3. Garante permissões corretas para o servidor web (www-data) 
+# na nova pasta segura do banco e na pasta de ícones[cite: 2]
 chown -R www-data:www-data /var/www/db_data
 chown -R www-data:www-data /var/www/html/icons
 
-exec "$@"
+exec "$@"[cite: 2]

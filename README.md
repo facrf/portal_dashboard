@@ -12,7 +12,7 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 
 ## 🎯 Filosofia do Projeto
 
-* **Zero Telemetria:** Sem rastreadores, sem pingbacks, sem análise de dados externa. O que acontece no seu servidor, fica no seu servidor.
+* **Zero Telemetria incorporada:** Sem rastreadores, sem pingbacks, sem análise de dados externa. O que acontece no seu servidor, fica no seu servidor a nao ser que voce queira adicionar.
 * **100% Local:** Dependência zero de APIs ou nuvens de terceiros. 
 * **Eficiência Máxima:** Construído puramente com **PHP** e **SQLite**, consumindo o mínimo possível de hardware (ideal para rodar em mini PCs, notebooks antigos ou Raspberry Pi).
 * **Liberdade de Customização:** Configure e organize seus serviços de forma simples e direta.

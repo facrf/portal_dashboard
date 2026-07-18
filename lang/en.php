@@ -1,8 +1,8 @@
 <?php
 return [
     'dashboard' => 'Dashboard',
-    'settings' => 'Settings',
-    'appearance_tabs' => 'Appearance & Tabs',
+    'settings' => 'Administration',
+    'appearance_tabs' => 'Configuration',
     'manage_services' => 'Manage Services',
     'add_service' => 'Add Service',
     'edit' => 'Edit',
@@ -13,5 +13,6 @@ return [
     'notes' => 'Notepad / Notes',
     'save_notes' => 'Save Notes',
     'status_running' => 'RUNNING',
-    'status_error' => 'ERROR'
+    'status_error' => 'ERROR',
+    'logout' => 'Logout'
 ];

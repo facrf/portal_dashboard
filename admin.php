@@ -2,23 +2,79 @@
 // admin.php
 require_once 'db.php';
 
+// ==========================================
+// PROCESSAMENTO DE AÇÕES (VIA POST + CSRF)
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action']) && $_POST['action'] === 'add_tool') {
+    
+    // PROTEÇÃO CSRF GLOBAL DO ADMIN.PHP
+    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die("Ação bloqueada: Token CSRF inválido.");
+    }
+
+    $action = $_POST['action'] ?? '';
+
+    // CRUD - SERVIÇOS
+    if ($action === 'add_tool') {
         $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id']]);
         header("Location: admin.php"); exit;
     }
-    if (isset($_POST['action']) && $_POST['action'] === 'edit_tool') {
+    elseif ($action === 'edit_tool') {
         $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=? WHERE id=?");
         $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id'], $_POST['tool_id']]);
         header("Location: admin.php"); exit;
     }
-    if (isset($_POST['action']) && $_POST['action'] === 'delete_tool') {
+    elseif ($action === 'delete_tool') {
         $pdo->prepare("DELETE FROM tools WHERE id=?")->execute([$_POST['tool_id']]);
         header("Location: admin.php"); exit;
     }
+
+    // CRUD - USUÁRIOS
+    elseif ($action === 'add_user' || $action === 'edit_user') {
+        $username = trim($_POST['username']);
+        
+        // Bloqueia qualquer coisa que não seja letra, número, ponto, traço ou underscore
+        if (!preg_match('/^[a-zA-Z0-9_.-]+$/', $username)) {
+            die("Ação bloqueada: O nome de usuário contém caracteres inválidos (evite espaços ou símbolos especiais).");
+        }
+
+        if ($action === 'add_user') {
+            $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+            $stmt->execute([$username, password_hash($_POST['password'], PASSWORD_BCRYPT)]);
+        } else {
+            if (!empty($_POST['password'])) {
+                $stmt = $pdo->prepare("UPDATE users SET username=?, password=? WHERE id=?");
+                $stmt->execute([$username, password_hash($_POST['password'], PASSWORD_BCRYPT), $_POST['user_id']]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE users SET username=? WHERE id=?");
+                $stmt->execute([$username, $_POST['user_id']]);
+            }
+        }
+        header("Location: admin.php#user-panel"); exit;
+    }
+    
+    // AÇÃO: EXCLUIR USUÁRIO
+    elseif ($action === 'delete_user') {
+        // Bloqueia a exclusão do último usuário garantindo que você nunca perca o acesso
+        $count = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        if ($count > 1) {
+            $pdo->prepare("DELETE FROM users WHERE id=?")->execute([$_POST['user_id']]);
+        }
+        header("Location: admin.php#user-panel"); exit;
+    }
+
+    // CONFIGURAÇÃO DE SESSÃO
+    elseif ($action === 'update_session') {
+        $days = max(1, intval($_POST['session_days']));
+        $pdo->prepare("UPDATE settings SET session_days=? WHERE id=1")->execute([$days]);
+        header("Location: admin.php#user-panel"); exit;
+    }
 }
 
+// ==========================================
+// BUSCAR DADOS PARA EXIBIR NA TELA
+// ==========================================
 $editMode = false; $editTool = null;
 if (isset($_GET['edit'])) {
     $stmt = $pdo->prepare("SELECT * FROM tools WHERE id = ?");
@@ -27,9 +83,18 @@ if (isset($_GET['edit'])) {
     if ($editTool) $editMode = true;
 }
 
+$editUserMode = false; $editUser = null;
+if (isset($_GET['edit_user'])) {
+    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE id = ?");
+    $stmt->execute([$_GET['edit_user']]);
+    $editUser = $stmt->fetch();
+    if ($editUser) $editUserMode = true;
+}
+
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
 $tools = $pdo->query("SELECT t.*, c.name as cat_name FROM tools t LEFT JOIN categories c ON t.category_id = c.id ORDER BY t.name ASC")->fetchAll();
+$usersList = $pdo->query("SELECT id, username FROM users ORDER BY username ASC")->fetchAll();
 
 $currentLang = $settings['language'] ?? 'pt';
 ?>
@@ -38,15 +103,11 @@ $currentLang = $settings['language'] ?? 'pt';
 <head>
     <meta charset="UTF-8">
     <title><?= t('manage_services') ?></title>
-    
-    <!-- INÍCIO DO FAVICON -->
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
         <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
-    <!-- FIM DO FAVICON -->
-
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
-    <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); --text-color: <?= htmlspecialchars($settings['text_color']) ?>; }</style>
+    <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; --bg-image: <?= !empty($settings['bg_image']) ? "url('".htmlspecialchars($settings['bg_image'])."')" : 'none' ?>; --text-color: <?= htmlspecialchars($settings['text_color']) ?>; }</style>
 </head>
 <body>
     <script>
@@ -70,6 +131,12 @@ $currentLang = $settings['language'] ?? 'pt';
                 <div class="header-nav">
                     <a href="index.php" class="btn">← <?= t('dashboard') ?></a>
                     <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
+
+                    <form method="POST" action="login.php" style="display: inline; margin: 0;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="action" value="logout">
+                        <button type="submit" class="btn btn-danger" style="margin-left: 10px;"><?= t('logout') ?></button>
+                    </form>
                 </div>
             </div>
         </header>
@@ -77,6 +144,7 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel" id="form-panel">
             <h2><?= $editMode ? t('edit') . ' Serviço' : t('add_service') ?></h2>
             <form method="POST" action="admin.php">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                 <input type="hidden" name="action" value="<?= $editMode ? 'edit_tool' : 'add_tool' ?>">
                 <?php if ($editMode): ?><input type="hidden" name="tool_id" value="<?= $editTool['id'] ?>"><?php endif; ?>
 
@@ -116,6 +184,70 @@ $currentLang = $settings['language'] ?? 'pt';
             </form>
         </div>
 
+        <!-- PAINEL DE USUÁRIOS E SEGURANÇA -->
+        <div class="admin-panel" id="user-panel">
+            <h2>Gestão de Acesso</h2>
+            
+            <form method="POST" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="action" value="update_session">
+                <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="flex:1; min-width: 200px; margin-bottom:0;">
+                        <label>Tempo para a sessão expirar (Dias):</label>
+                        <input type="number" name="session_days" value="<?= $settings['session_days'] ?? 7 ?>" min="1" required>
+                    </div>
+                    <button type="submit" class="btn">Salvar Alteração</button>
+                </div>
+            </form>
+
+            <form method="POST" style="display:flex; gap:15px; align-items:flex-end; margin-bottom: 2rem; flex-wrap: wrap;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="action" value="<?= $editUserMode ? 'edit_user' : 'add_user' ?>">
+                <?php if ($editUserMode): ?><input type="hidden" name="user_id" value="<?= $editUser['id'] ?>"><?php endif; ?>
+                
+                <div class="form-group" style="flex:1; min-width: 150px; margin-bottom:0;">
+                    <label><?= $editUserMode ? 'Editar Usuário' : 'Novo Usuário' ?>:</label>
+                    <input type="text" name="username" value="<?= $editUserMode ? htmlspecialchars($editUser['username'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
+                </div>
+                <div class="form-group" style="flex:1; min-width: 150px; margin-bottom:0;">
+                    <label><?= $editUserMode ? 'Nova Senha (deixe vazio p/ manter)' : 'Senha' ?>:</label>
+                    <input type="password" name="password" <?= $editUserMode ? '' : 'required' ?>>
+                </div>
+                <button type="submit" class="btn"><?= $editUserMode ? 'Salvar Usuário' : 'Criar Usuário' ?></button>
+                <?php if ($editUserMode): ?><a href="admin.php#user-panel" class="btn">Cancelar</a><?php endif; ?>
+            </form>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome de Usuário</th>
+                        <th style="width: 150px; text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($usersList as $usr): ?>
+                        <tr style="<?= ($editUserMode && $editUser['id'] == $usr['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                            <td style="font-weight:bold"><?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td>
+                                <div class="action-buttons" style="justify-content: flex-end;">
+                                    <a href="admin.php?edit_user=<?= $usr['id'] ?>#user-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem">Editar</a>
+                                    <?php if (count($usersList) > 1): ?>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                                            <input type="hidden" name="action" value="delete_user">
+                                            <input type="hidden" name="user_id" value="<?= $usr['id'] ?>">
+                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('Excluir usuário <?= htmlspecialchars($usr['username'], ENT_QUOTES) ?>?');">Excluir</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PAINEL DE SERVIÇOS -->
         <div class="admin-panel">
             <h2><?= t('Serviços Cadastrados') ?></h2>
             <table>
@@ -135,15 +267,16 @@ $currentLang = $settings['language'] ?? 'pt';
                                     <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
                                 <?php endif; ?>
                             </td>
-                            <td style="font-weight:bold"><?= htmlspecialchars($tool['name']) ?></td>
+                            <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars($tool['cat_name']) ?></td>
                             <td>
                                 <div class="action-buttons">
                                     <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
                                     <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                                         <input type="hidden" name="action" value="delete_tool">
                                         <input type="hidden" name="tool_id" value="<?= $tool['id'] ?>">
-                                        <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('delete') ?> \'<?= htmlspecialchars($tool['name']) ?>\'?');"><?= t('delete') ?></button>
+                                        <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm(<?= htmlspecialchars(json_encode(t('delete') . ' \'' . $tool['name'] . '\'?'), ENT_QUOTES, 'UTF-8') ?>);"><?= t('delete') ?></button>
                                     </form>
                                 </div>
                             </td>

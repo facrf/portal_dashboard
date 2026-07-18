@@ -23,6 +23,27 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
+    // PROTEÇÃO CSRF GLOBAL DO CONFIG.PHP
+    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die("Ação bloqueada: Token CSRF inválido.");
+    }
+
+    // ==========================================
+    // EXPORTAÇÃO SEGURA VIA POST
+    // ==========================================
+    if (isset($_POST['action']) && $_POST['action'] === 'export') {
+        $data = [
+            'format' => 'meu_portal_v1',
+            'settings' => $pdo->query("SELECT * FROM settings LIMIT 1")->fetch(),
+            'categories' => $pdo->query("SELECT * FROM categories")->fetchAll(),
+            'tools' => $pdo->query("SELECT * FROM tools")->fetchAll()
+        ];
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="portal_backup_' . date('Y-m-d_H-i') . '.json"');
+        echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    
     // MÓDULO DE IMPORTAÇÃO (Nativo, Heimdall, Homepage)
     if (isset($_POST['action']) && $_POST['action'] === 'import') {
         if (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
@@ -32,34 +53,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($ext === 'json') {
                 $json = json_decode($fileContent, true);
                 
-                // 1. IMPORTAÇÃO NATIVA (Restore Completo)
+                // 1. IMPORTAÇÃO NATIVA (Restore Completo com Transação)
                 if (isset($json['format']) && $json['format'] === 'meu_portal_v1') {
-                    $pdo->exec("DELETE FROM tools");
-                    $pdo->exec("DELETE FROM categories");
-                    
-                    $catMap = []; // Mapeia IDs antigos para novos IDs gerados no BD
-                    foreach ($json['categories'] as $c) {
-                        $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
-                        $stmt->execute([$c['name']]);
-                        $catMap[$c['id']] = $pdo->lastInsertId();
-                    }
-                    
-                    foreach ($json['tools'] as $t) {
-                        $newCatId = $catMap[$t['category_id']] ?? 1;
-                        $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                        $stmt->execute([$t['name'], $t['url'], $t['icon_url'], $t['description'], $newCatId]);
-                    }
-                    
-                    if (isset($json['settings'])) {
-                        $s = $json['settings'];
-                        $footer = $s['footer_text'] ?? '';
-                        $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, footer_text=? WHERE id=1");
-                        $stmt->execute([$s['portal_name'], $s['favicon'], $s['bg_color'], $s['bg_image'], $s['text_color'], $s['language'], $footer]);
+                    if (isset($json['categories']) && is_array($json['categories']) && isset($json['tools']) && is_array($json['tools'])) {
+                        try {
+                            $pdo->beginTransaction();
+
+                            $pdo->exec("DELETE FROM tools");
+                            $pdo->exec("DELETE FROM categories");
+                            
+                            $catMap = []; 
+                            foreach ($json['categories'] as $c) {
+                                $name = $c['name'] ?? 'Categoria Recuperada';
+                                $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
+                                $stmt->execute([$name]);
+                                $catMap[$c['id'] ?? 0] = $pdo->lastInsertId();
+                            }
+                            
+                            foreach ($json['tools'] as $t) {
+                                $newCatId = $catMap[$t['category_id'] ?? null] ?? 1;
+                                $name = $t['name'] ?? 'Serviço Recuperado';
+                                $url = $t['url'] ?? '';
+                                $icon = $t['icon_url'] ?? '';
+                                $desc = $t['description'] ?? '';
+
+                                $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
+                                $stmt->execute([$name, $url, $icon, $desc, $newCatId]);
+                            }
+                            
+                            if (isset($json['settings']) && is_array($json['settings'])) {
+                                $s = $json['settings'];
+                                $footer = $s['footer_text'] ?? '';
+                                
+                                $allowedLangs = ['pt', 'es', 'en'];
+                                $importLang = (isset($s['language']) && in_array($s['language'], $allowedLangs)) ? $s['language'] : 'pt';
+
+                                $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, footer_text=? WHERE id=1");
+                                $stmt->execute([
+                                    $s['portal_name'] ?? 'Meu Portal', 
+                                    $s['favicon'] ?? '', 
+                                    $s['bg_color'] ?? '#000000', 
+                                    $s['bg_image'] ?? '', 
+                                    $s['text_color'] ?? '#ffffff', 
+                                    $importLang, 
+                                    $footer
+                                ]);
+                            }
+
+                            $pdo->commit();
+
+                        } catch (Exception $e) {
+                            $pdo->rollBack();
+                            die("Erro na importação. O banco de dados foi preservado. Detalhe: " . htmlspecialchars($e->getMessage()));
+                        }
                     }
                 } 
                 // 2. IMPORTAÇÃO DO HEIMDALL (Detecta e Anexa dados)
                 else {
-                    // Tenta encontrar um array de apps (Heimdall)
                     $items = isset($json['apps']) ? $json['apps'] : (is_array($json) ? $json : []);
                     
                     if (!empty($items)) {
@@ -89,17 +139,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $currentAppProps = [];
 
                 foreach ($lines as $line) {
-                    // Ignora linhas vazias ou comentários
                     if (trim($line) === '' || str_starts_with(trim($line), '#')) continue;
                     
-                    // Conta os espaços para entender a hierarquia do YAML
                     preg_match('/^(\s*)/', $line, $matches);
                     $indent = strlen($matches[1]);
                     $content = trim($line);
 
-                    // Detecta início de lista (Categoria ou App) "- Nome:"
                     if (preg_match('/^-\s+(.+?):$/', $content, $m)) {
-                        // Se já tínhamos um app mapeado, salva no banco antes de ler o próximo
                         if ($currentApp) {
                             $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
                             $stmt->execute([$currentApp, $currentAppProps['href'] ?? '', $currentAppProps['icon'] ?? '', $currentAppProps['description'] ?? '', $currentCatId]);
@@ -110,23 +156,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $catOrAppName = trim($m[1], " '\"");
                         
                         if ($indent === 0) {
-                            // Indentação 0 = Nova Categoria
                             $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
                             $stmt->execute([$catOrAppName . ' (Homepage)']);
                             $currentCatId = $pdo->lastInsertId();
                         } else {
-                            // Indentação maior = Novo App dentro da categoria atual
                             $currentApp = $catOrAppName;
                         }
                     } 
-                    // Detecta propriedades do App (chave: valor)
                     elseif (preg_match('/^([a-zA-Z0-9_]+):\s*(.+)$/', $content, $m)) {
                         if ($currentApp) {
                             $currentAppProps[trim($m[1])] = trim($m[2], " '\"");
                         }
                     }
                 }
-                // Salva o último app que ficou na memória quando o loop acabar
                 if ($currentApp) {
                     $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
                     $stmt->execute([$currentApp, $currentAppProps['href'] ?? '', $currentAppProps['icon'] ?? '', $currentAppProps['description'] ?? '', $currentCatId]);
@@ -139,8 +181,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Salvar Configurações Visuais
     if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
+        
+        $allowedLangs = ['pt', 'es', 'en'];
+        $lang = in_array($_POST['language'], $allowedLangs) ? $_POST['language'] : 'pt';
+
         $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=? WHERE id=1");
-        $stmt->execute([$_POST['portal_name'], $_POST['favicon'], $_POST['bg_color'], $_POST['bg_image'], $_POST['text_color'], $_POST['language']]);
+        $stmt->execute([$_POST['portal_name'], $_POST['favicon'], $_POST['bg_color'], $_POST['bg_image'], $_POST['text_color'], $lang]);
+        
         header("Location: config.php?success=1"); exit;
     }
     
@@ -156,7 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'delete_category') {
         $catId = $_POST['cat_id'];
         
-        // Utilizando Prepare/Execute em vez de Query concatenada
         $stmtFallback = $pdo->prepare("SELECT id FROM categories WHERE id != ? LIMIT 1");
         $stmtFallback->execute([$catId]);
         $fallbackCat = $stmtFallback->fetchColumn();
@@ -166,7 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fallbackCat = $pdo->lastInsertId(); 
         }
         
-        // Move os serviços e deleta a categoria de forma segura
         $pdo->prepare("UPDATE tools SET category_id = ? WHERE category_id = ?")->execute([$fallbackCat, $catId]);
         $pdo->prepare("DELETE FROM categories WHERE id = ?")->execute([$catId]); 
         
@@ -222,6 +267,11 @@ $currentLang = $settings['language'] ?? 'pt';
                 <div class="header-nav">
                     <a href="index.php" class="btn">← <?= t('dashboard') ?></a>
                     <a href="admin.php" class="btn"><?= t('manage_services') ?></a>
+                    <form method="POST" action="login.php" style="display: inline; margin: 0;">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" class="btn btn-danger" style="margin-left: 10px;"><?= t('logout') ?></button>
+    </form>
                 </div>
             </div>
         </header>
@@ -236,6 +286,7 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel">
             <h2><?= t('settings') ?></h2>
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                 <input type="hidden" name="action" value="update_settings">
                 
                 <div class="form-group">
@@ -283,12 +334,17 @@ $currentLang = $settings['language'] ?? 'pt';
             <h2><?= t('Backup & Importação') ?></h2>
             <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
                 
-                <!-- Box Exportar -->
-                <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                    <h3 style="margin-top:0;">📦 <?= t('Exportar Backup') ?></h3>
-                    <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;">Baixe todas as suas configurações, abas e serviços cadastrados no formato nativo (JSON). É a melhor forma de salvar seu progresso para não perder os links e o layout configurado.</p>
-                    <a href="config.php?action=export" class="btn"><?= t('Download Backup (JSON)') ?></a>
-                </div>
+<!-- Box Exportar -->
+<div style="flex: 1; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+    <h3 style="margin-top:0;">📦 <?= t('Exportar Backup') ?></h3>
+    <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;">Baixe todas as suas configurações, abas e serviços cadastrados no formato nativo (JSON). É a melhor forma de salvar seu progresso para não perder os links e o layout configurado.</p>
+    
+    <form method="POST" action="config.php" style="margin: 0;">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="action" value="export">
+        <button type="submit" class="btn"><?= t('Download Backup (JSON)') ?></button>
+    </form>
+</div>
 
                 <!-- Box Importar -->
                 <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
@@ -301,6 +357,7 @@ $currentLang = $settings['language'] ?? 'pt';
                     </ul>
                     
                     <form method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                         <input type="hidden" name="action" value="import">
                         <input type="file" name="import_file" accept=".json,.yaml,.yml" required style="flex:1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 6px; color: var(--text-color);">
                         <button type="submit" class="btn btn-glow"><?= t('Importar') ?></button>
@@ -313,6 +370,7 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel" id="cat-panel">
             <h2><?= t('Gerenciar Categorias (Abas)') ?></h2>
             <form method="POST" style="display:flex; gap:10px; align-items:flex-end; margin-bottom: 2rem;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                 <input type="hidden" name="action" value="<?= $editCatMode ? 'edit_category' : 'add_category' ?>">
                 <?php if ($editCatMode): ?><input type="hidden" name="cat_id" value="<?= $editCat['id'] ?>"><?php endif; ?>
                 
@@ -334,6 +392,7 @@ $currentLang = $settings['language'] ?? 'pt';
                                 <div class="action-buttons">
                                     <a href="config.php?edit_cat=<?= $cat['id'] ?>#cat-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
                                     <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                                         <input type="hidden" name="action" value="delete_category">
                                         <input type="hidden" name="cat_id" value="<?= $cat['id'] ?>">
                                         <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('Excluir aba? Serviços serão movidos para outra.') ?>');"><?= t('delete') ?></button>
