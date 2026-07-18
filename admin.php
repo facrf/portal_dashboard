@@ -2,229 +2,169 @@
 // admin.php
 require_once 'db.php';
 
-// ==========================================
-// EXPORTAÇÃO (Método GET, mas seguro pois apenas lê dados)
-// ==========================================
-if (isset($_GET['export']) && $_GET['export'] === 'json') {
-    $exportData = [
-        'settings' => $pdo->query("SELECT * FROM settings LIMIT 1")->fetch(PDO::FETCH_ASSOC),
-        'categories' => $pdo->query("SELECT * FROM categories")->fetchAll(PDO::FETCH_ASSOC),
-        'tools' => $pdo->query("SELECT * FROM tools")->fetchAll(PDO::FETCH_ASSOC)
-    ];
-    header('Content-Type: application/json');
-    header('Content-Disposition: attachment; filename="portal_backup.json"');
-    echo json_encode($exportData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-// ==========================================
-// PROCESSAMENTO DE AÇÕES DE ESCRITA COM PROTEÇÃO CSRF
-// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    
-    // Validação do Token
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die("<div style='background: #ffebe9; color: #ff4d4d; padding: 20px; text-align: center; border-radius: 8px; margin: 40px auto; max-width: 400px;'>⚠️ Erro CSRF. Ação não autorizada.</div>");
+    if (isset($_POST['action']) && $_POST['action'] === 'add_tool') {
+        $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id']]);
+        header("Location: admin.php"); exit;
     }
-
-    $action = $_POST['action'] ?? '';
-
-    // Ação: Adicionar ou Editar Serviço
-    if ($action === 'save_tool') {
-        $id = !empty($_POST['id']) ? (int)$_POST['id'] : null;
-        $name = $_POST['name'];
-        $url = $_POST['url'];
-        $icon_url = $_POST['icon_url'];
-        $desc = $_POST['description'] ?? '';
-        $catId = !empty($_POST['category_id']) ? (int)$_POST['category_id'] : 1;
-
-        if ($id) {
-            $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=? WHERE id=?");
-            $stmt->execute([$name, $url, $icon_url, $desc, $catId, $id]);
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $url, $icon_url, $desc, $catId]);
-        }
-        header("Location: admin.php");
-        exit;
+    if (isset($_POST['action']) && $_POST['action'] === 'edit_tool') {
+        $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=? WHERE id=?");
+        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id'], $_POST['tool_id']]);
+        header("Location: admin.php"); exit;
     }
-
-    // Ação: Excluir Serviço
-    if ($action === 'delete_tool' && !empty($_POST['id'])) {
-        $stmt = $pdo->prepare("DELETE FROM tools WHERE id = ?");
-        $stmt->execute([(int)$_POST['id']]);
-        header("Location: admin.php");
-        exit;
-    }
-
-    // Ação: Adicionar Categoria
-    if ($action === 'add_category' && !empty($_POST['category_name'])) {
-        $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
-        $stmt->execute([$_POST['category_name']]);
-        header("Location: admin.php");
-        exit;
-    }
-
-    // Ação: Excluir Categoria (Com Fallback Seguro para ID 1)
-    if ($action === 'delete_category' && !empty($_POST['id'])) {
-        $catId = (int)$_POST['id'];
-        if ($catId !== 1) { // Protege a categoria Geral de ser apagada
-            $pdo->exec("UPDATE tools SET category_id = 1 WHERE category_id = $catId");
-            $pdo->exec("DELETE FROM categories WHERE id = $catId");
-        }
-        header("Location: admin.php");
-        exit;
-    }
-
-    // Ação: Importar Backup
-    if ($action === 'import_data' && isset($_FILES['import_file'])) {
-        $fileData = file_get_contents($_FILES['import_file']['tmp_name']);
-        $json = json_decode($fileData, true);
-        if ($json) {
-            // Se for Heimdall (apps array)
-            if (isset($json['apps'])) {
-                foreach ($json['apps'] as $app) {
-                    $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, category_id) VALUES (?, ?, ?, 1)");
-                    $stmt->execute([$app['title'] ?? 'App', $app['url'] ?? '#', $app['icon'] ?? '']);
-                }
-            }
-            // Se for Backup Nativo (tools array)
-            elseif (isset($json['tools'])) {
-                foreach ($json['tools'] as $tool) {
-                    $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->execute([$tool['name'], $tool['url'], $tool['icon_url'], $tool['description'], $tool['category_id'] ?? 1]);
-                }
-            }
-        }
-        header("Location: admin.php");
-        exit;
+    if (isset($_POST['action']) && $_POST['action'] === 'delete_tool') {
+        $pdo->prepare("DELETE FROM tools WHERE id=?")->execute([$_POST['tool_id']]);
+        header("Location: admin.php"); exit;
     }
 }
 
-// ==========================================
-// CARREGAMENTO DOS DADOS PARA EXIBIÇÃO
-// ==========================================
-$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-$categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-$tools = $pdo->query("SELECT tools.*, categories.name as category_name FROM tools LEFT JOIN categories ON tools.category_id = categories.id ORDER BY tools.name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$editMode = false; $editTool = null;
+if (isset($_GET['edit'])) {
+    $stmt = $pdo->prepare("SELECT * FROM tools WHERE id = ?");
+    $stmt->execute([$_GET['edit']]);
+    $editTool = $stmt->fetch();
+    if ($editTool) $editMode = true;
+}
+
+$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
+$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+$tools = $pdo->query("SELECT t.*, c.name as cat_name FROM tools t LEFT JOIN categories c ON t.category_id = c.id ORDER BY t.name ASC")->fetchAll();
+
+$currentLang = $settings['language'] ?? 'pt';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($langCode) ?>">
+<html lang="<?= htmlspecialchars($currentLang) ?>">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Administração</title>
+    <title><?= t('manage_services') ?></title>
     
-    <!-- FAVICON -->
-    <?php $faviconUrl = resolveIconUrl($settings['favicon']); if(!empty($faviconUrl)): ?>
-        <link rel="icon" href="<?= $faviconUrl ?>">
+    <!-- INÍCIO DO FAVICON -->
+    <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
+        <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
+    <!-- FIM DO FAVICON -->
 
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); --text-color: <?= htmlspecialchars($settings['text_color']) ?>; }</style>
 </head>
 <body>
-    <header class="topbar">
-        <h2>Gerenciamento de Serviços</h2>
-        <div class="topbar-actions">
-            <a href="index.php" class="btn">← Dashboard</a>
-            <a href="config.php" class="btn">Aparência</a>
-        </div>
-    </header>
-
-    <main class="container">
-        <!-- BLOCO 1: NOVO SERVIÇO -->
-        <section class="admin-section">
-            <h3>Adicionar / Editar Serviço</h3>
-            <form method="POST" action="admin.php">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                <input type="hidden" name="action" value="save_tool">
-                <input type="hidden" name="id" value="">
+    <script>
+        if(localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+        }
+    </script>
+    <div class="container">
+        <header>
+            <h1><?= t('manage_services') ?></h1>
+            <div class="header-controls">
                 
-                <div class="form-group grid-2-col">
-                    <div><label>Nome:</label><input type="text" name="name" required></div>
-                    <div>
-                        <label>Categoria:</label>
-                        <select name="category_id">
-                            <?php foreach ($categories as $cat): ?>
-                                <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Modo Claro/Escuro">
+                    <svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm9-4h-2c-.55 0-1 .45-1 1s.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1zM4 12c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zm7-9V1c0-.55-.45-1-1-1s-1 .45-1 1v2c0 .55.45 1 1 1s1-.45 1-1zm0 18v2c0 .55-.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zm7.66-13.88l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zM4.93 19.07l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zm14.14 0c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.41-1.41c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.41zM6.34 6.34c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L6.34 3.51c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.42z"/></svg>
+                    <div class="toggle-slot"><div class="toggle-button"></div></div>
+                    <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4C12.92 3.04 12.46 3 12 3z"/></svg>
                 </div>
-                <div class="form-group"><label>URL:</label><input type="url" name="url" required></div>
-                <div class="form-group"><label>Ícone (URL ou arquivo local em /icons):</label><input type="text" name="icon_url"></div>
-                <div class="form-group"><label>Descrição:</label><input type="text" name="description"></div>
-                <button type="submit" class="btn primary">Salvar Serviço</button>
-            </form>
-        </section>
-
-        <!-- BLOCO 2: CATEGORIAS -->
-        <section class="admin-section">
-            <h3>Categorias</h3>
-            <form method="POST" action="admin.php" style="display:flex; gap:10px; margin-bottom: 20px;">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                <input type="hidden" name="action" value="add_category">
-                <input type="text" name="category_name" placeholder="Nova Categoria" required style="flex:1;">
-                <button type="submit" class="btn primary">Adicionar</button>
-            </form>
-            <ul style="list-style: none; padding: 0;">
-                <?php foreach ($categories as $cat): ?>
-                    <li style="display:flex; justify-content:space-between; align-items: center; margin-bottom:10px; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
-                        <?= htmlspecialchars($cat['name']) ?>
-                        <?php if($cat['id'] != 1): ?>
-                            <!-- EXCLUSÃO VIA FORMULÁRIO POST SEGURO CONTRA CSRF -->
-                            <form method="POST" action="admin.php" style="display:inline; margin:0;">
-                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                                <input type="hidden" name="action" value="delete_category">
-                                <input type="hidden" name="id" value="<?= $cat['id'] ?>">
-                                <button type="submit" class="btn" style="background:#dc3545; padding: 5px 10px; font-size: 0.9em;" onclick="return confirm('Excluir? Serviços voltarão para Geral.')">Excluir</button>
-                            </form>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </section>
-
-        <!-- BLOCO 3: LISTA DE SERVIÇOS -->
-        <section class="admin-section">
-            <h3>Serviços Cadastrados</h3>
-            <ul style="list-style: none; padding: 0;">
-                <?php foreach ($tools as $tool): ?>
-                    <li style="display:flex; justify-content:space-between; align-items: center; margin-bottom:10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                        <div>
-                            <strong><?= htmlspecialchars($tool['name']) ?></strong> <small>(<?= htmlspecialchars($tool['category_name']) ?>)</small><br>
-                            <small><?= htmlspecialchars($tool['url']) ?></small>
-                        </div>
-                        <div style="display:flex; gap: 10px;">
-                            <!-- EXCLUSÃO DE FERRAMENTA VIA FORM POST -->
-                            <form method="POST" action="admin.php" style="display:inline; margin:0;">
-                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                                <input type="hidden" name="action" value="delete_tool">
-                                <input type="hidden" name="id" value="<?= $tool['id'] ?>">
-                                <button type="submit" class="btn" style="background:#dc3545; padding: 5px 10px; font-size: 0.9em;" onclick="return confirm('Excluir este serviço?')">Excluir</button>
-                            </form>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </section>
-
-        <!-- BLOCO 4: BACKUP E IMPORTAÇÃO -->
-        <section class="admin-section">
-            <h3>Backup e Importação</h3>
-            <div style="display:flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-                <div>
-                    <a href="admin.php?export=json" class="btn primary">Baixar Backup (JSON)</a>
+                
+                <div class="header-nav">
+                    <a href="index.php" class="btn">← <?= t('dashboard') ?></a>
+                    <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
                 </div>
-                <form method="POST" action="admin.php" enctype="multipart/form-data" style="display:flex; gap: 10px; align-items: center;">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                    <input type="hidden" name="action" value="import_data">
-                    <input type="file" name="import_file" accept=".json" required>
-                    <button type="submit" class="btn">Importar</button>
-                </form>
             </div>
-        </section>
-    </main>
+        </header>
+
+        <div class="admin-panel" id="form-panel">
+            <h2><?= $editMode ? t('edit') . ' Serviço' : t('add_service') ?></h2>
+            <form method="POST" action="admin.php">
+                <input type="hidden" name="action" value="<?= $editMode ? 'edit_tool' : 'add_tool' ?>">
+                <?php if ($editMode): ?><input type="hidden" name="tool_id" value="<?= $editTool['id'] ?>"><?php endif; ?>
+
+                <div class="form-group">
+                    <label><?= t('Nome do Serviço') ?>:</label>
+                    <input type="text" name="name" value="<?= $editMode ? htmlspecialchars($editTool['name']) : '' ?>" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><?= t('Categoria / Aba') ?>:</label>
+                    <select name="category_id" required>
+                        <?php foreach ($categories as $cat): ?>
+                            <option value="<?= $cat['id'] ?>" <?= ($editMode && $editTool['category_id'] == $cat['id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cat['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label><?= t('URL de Destino') ?>:</label>
+                    <input type="text" name="url" value="<?= $editMode ? htmlspecialchars($editTool['url']) : '' ?>" required>
+                </div>
+                <div class="form-group">
+                    <label><?= t('Ícone') ?> (URL / /icons):</label>
+                    <input type="text" name="icon_url" value="<?= $editMode ? htmlspecialchars($editTool['icon_url']) : '' ?>">
+                </div>
+                <div class="form-group">
+                    <label><?= t('Descrição Curta') ?>:</label>
+                    <textarea name="description" rows="2"><?= $editMode ? htmlspecialchars($editTool['description']) : '' ?></textarea>
+                </div>
+                
+                <div>
+                    <button type="submit" class="btn"><?= $editMode ? t('save_changes') : t('add_service') ?></button>
+                    <?php if ($editMode): ?><a href="admin.php" class="btn"><?= t('Cancelar') ?></a><?php endif; ?>
+                </div>
+            </form>
+        </div>
+
+        <div class="admin-panel">
+            <h2><?= t('Serviços Cadastrados') ?></h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th><?= t('Ícone') ?></th>
+                        <th><?= t('Nome do Serviço') ?></th>
+                        <th><?= t('Categoria / Aba') ?></th>
+                        <th><?= t('Ações') ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($tools as $tool): ?>
+                        <tr style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                            <td>
+                                <?php $resIco = resolveIconUrl($tool['icon_url']); if(!empty($resIco)): ?>
+                                    <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
+                                <?php endif; ?>
+                            </td>
+                            <td style="font-weight:bold"><?= htmlspecialchars($tool['name']) ?></td>
+                            <td><?= htmlspecialchars($tool['cat_name']) ?></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="action" value="delete_tool">
+                                        <input type="hidden" name="tool_id" value="<?= $tool['id'] ?>">
+                                        <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('delete') ?> \'<?= htmlspecialchars($tool['name']) ?>\'?');"><?= t('delete') ?></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('input', () => {
+                    const btn = form.querySelector('button[type="submit"]');
+                    if (btn && !btn.classList.contains('btn-danger') && !btn.classList.contains('btn-glow')) {
+                        btn.classList.add('btn-glow');
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
