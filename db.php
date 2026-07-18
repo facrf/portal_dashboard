@@ -1,8 +1,17 @@
 <?php
 // db.php
 
-// MUDANÇA DE SEGURANÇA: dirname(__DIR__) volta uma pasta (para /var/www)
-// e cria a pasta db_data fora do alcance público do Apache (/var/www/html)
+// ==========================================
+// SEGURANÇA: SESSÃO E TOKEN ANTI-CSRF
+// ==========================================
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+// Gera um token forte se ele ainda não existir na sessão
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+#
 $dbDir = dirname(__DIR__) . '/db_data';
 $dbFile = $dbDir . '/bd.db';
 

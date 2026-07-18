@@ -3,288 +3,176 @@
 require_once 'db.php';
 
 // ==========================================
-// CLASSE PINGER INTEGRADA (Substitui ping.php)
-// ==========================================
-class Pinger {
-    /**
-     * Envia uma requisição UDP real para validar se o Servidor NTP está online.
-     * Envia um pacote de 48 bytes (padrão do protocolo NTP) e aguarda resposta.
-     */
-    private static function testNtpServer($host, $port = 123) {
-        $fp = @fsockopen("udp://$host", $port, $errno, $errstr, 1.5);
-        if (!$fp) return false;
-
-        stream_set_timeout($fp, 1, 500000);
-        $packet = "\x1b" . str_repeat("\0", 47);
-        $write = @fwrite($fp, $packet);
-        
-        if ($write === false) { 
-            fclose($fp); 
-            return false; 
-        }
-
-        $response = @fread($fp, 48);
-        fclose($fp);
-
-        return (!empty($response) && strlen($response) >= 48);
-    }
-
-    /**
-     * Executa a checagem com base nos parâmetros GET
-     */
-    public static function check($params) {
-        // 1. Método de teste para portas (Bancos de dados, NTP, etc.)
-        if (isset($params['host']) && isset($params['port'])) {
-            $host = filter_var($params['host'], FILTER_SANITIZE_URL);
-            $port = intval($params['port']);
-
-            // Limpa possíveis protocolos inseridos no host
-            $host = preg_replace('~^https?://~i', '', $host);
-            $host = preg_replace('~^udp://~i', '', $host);
-
-            if (!empty($host) && $port > 0) {
-                if ($port === 123) {
-                    return self::testNtpServer($host, $port);
-                } else {
-                    // Teste padrão TCP para portas de Bancos de Dados, etc.
-                    $connection = @fsockopen($host, $port, $errno, $errstr, 1.5);
-                    if (is_resource($connection)) {
-                        fclose($connection);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        // 2. Método padrão: teste HTTP HEAD (Para sites e web apps normais)
-        if (isset($params['url'])) {
-            $url = filter_var($params['url'], FILTER_SANITIZE_URL);
-            if ($url) {
-                $context = stream_context_create([
-                    'http' => [
-                        'method' => 'HEAD',
-                        'timeout' => 2,
-                        'ignore_errors' => true
-                    ],
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false
-                    ]
-                ]);
-
-                $headers = @get_headers($url, 1, $context);
-                if ($headers !== false) {
-                    preg_match('/HTTP\/\d(?:\.\d)?\s+(\d+)/', $headers[0], $matches);
-                    $code = isset($matches[1]) ? intval($matches[1]) : 0;
-                    if ($code > 0) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-}
-
-// ==========================================
-// INTERCEPTADOR DE PING (AJAX API)
+// INTERCEPTADOR DE PING (SEGURANÇA SSRF APLICADA)
 // ==========================================
 if (isset($_GET['action']) && $_GET['action'] === 'ping') {
     header('Content-Type: application/json');
-    $isOnline = Pinger::check($_GET);
-    echo json_encode(['status' => $isOnline ? 'ok' : 'error']);
+    $status = 'offline';
+    
+    // Recebe apenas o ID em vez de host/porta
+    $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    
+    if ($id > 0) {
+        // Busca a URL oficial direto no banco de dados
+        $stmt = $pdo->prepare("SELECT url FROM tools WHERE id = ?");
+        $stmt->execute([$id]);
+        $tool = $stmt->fetch();
+        
+        if ($tool && !empty($tool['url'])) {
+            $parsedUrl = parse_url($tool['url']);
+            $host = $parsedUrl['host'] ?? null;
+            $port = $parsedUrl['port'] ?? (isset($parsedUrl['scheme']) && $parsedUrl['scheme'] === 'https' ? 443 : 80);
+            
+            if ($host) {
+                // @fsockopen com timeout de 1s, suprimindo warnings visuais em caso de erro (host offline)
+                $fp = @fsockopen($host, $port, $errno, $errstr, 1);
+                if ($fp) {
+                    fclose($fp);
+                    $status = 'online';
+                }
+            }
+        }
+    }
+    
+    echo json_encode(['status' => $status]);
     exit;
 }
 
 // ==========================================
-// LÓGICA PADRÃO DA PÁGINA
+// CARREGAMENTO DE DADOS (CONFIGURAÇÕES E FERRAMENTAS)
 // ==========================================
-
-// Salva o texto do bloco de notas do rodapé
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_footer') {
-    $stmt = $pdo->prepare("UPDATE settings SET footer_text = ? WHERE id = 1");
-    $stmt->execute([$_POST['footer_text']]);
-    header("Location: index.php");
-    exit;
+$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+if (!$settings) {
+    // Fallback caso a tabela esteja vazia por algum motivo
+    $settings = ['bg_color' => '#1e1e2e', 'bg_image' => '', 'text_color' => '#cdd6f4', 'portal_name' => 'Meu Portal', 'favicon' => ''];
 }
 
-$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
-$bgImageStyle = !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image']) . "')" : 'none';
-$currentLang = $settings['language'] ?? 'pt';
+$categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
-$toolsList = $pdo->query("SELECT * FROM tools ORDER BY name ASC")->fetchAll();
-
-$groupedTools = [];
-foreach ($categories as $cat) { $groupedTools[$cat['id']] = []; }
-foreach ($toolsList as $tool) {
-    $cid = $tool['category_id'];
-    if (isset($groupedTools[$cid])) { $groupedTools[$cid][] = $tool; }
+// Organiza as ferramentas agrupando pelo ID da categoria
+$toolsByCategory = [];
+$stmt = $pdo->query("SELECT * FROM tools ORDER BY name ASC");
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $catId = $row['category_id'] ?: 1; // Fallback de segurança para a categoria 1
+    if (!isset($toolsByCategory[$catId])) {
+        $toolsByCategory[$catId] = [];
+    }
+    $toolsByCategory[$catId][] = $row;
 }
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLang) ?>">
+<html lang="<?= htmlspecialchars($langCode ?? 'pt') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($settings['portal_name']) ?></title>
     
+    <!-- INÍCIO DO FAVICON -->
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
         <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
-    
+    <!-- FIM DO FAVICON -->
+
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>
-        :root {
-            --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>;
-            --bg-image: <?= $bgImageStyle ?>;
-            --text-color: <?= htmlspecialchars($settings['text_color']) ?>;
+        :root { 
+            --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; 
+            --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); 
+            --text-color: <?= htmlspecialchars($settings['text_color']) ?>; 
         }
     </style>
 </head>
 <body>
-    <script>
-        if(localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
-        function toggleTheme() {
-            document.body.classList.toggle('light-theme');
-            localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
-        }
-    </script>
-    <div class="container">
-        <header>
+    <header class="topbar">
+        <div class="logo">
             <h1><?= htmlspecialchars($settings['portal_name']) ?></h1>
-            <div class="header-controls">
-                
-                <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Toggle Theme">
-                    <svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm9-4h-2c-.55 0-1 .45-1 1s.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1zM4 12c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zm7-9V1c0-.55-.45-1-1-1s-1 .45-1 1v2c0 .55.45 1 1 1s1-.45 1-1zm0 18v2c0 .55-.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zm7.66-13.88l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zM4.93 19.07l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zm14.14 0c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.41-1.41c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.41zM6.34 6.34c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L6.34 3.51c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.42z"/></svg>
-                    <div class="toggle-slot"><div class="toggle-button"></div></div>
-                    <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4C12.92 3.04 12.46 3 12 3z"/></svg>
-                </div>
+        </div>
+        <div class="topbar-actions">
+            <button id="themeToggle" class="btn" title="Alternar Tema">🌓</button>
+            <a href="admin.php" class="btn"><?= t('manage_services') ?? '⚙️ Serviços' ?></a>
+            <a href="config.php" class="btn"><?= t('appearance_tabs') ?? '🎨 Aparência' ?></a>
+        </div>
+    </header>
 
-                <div class="header-nav">
-                    <a href="admin.php" class="btn"><?= t('settings') ?></a>
-                    <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
-                </div>
-            </div>
-        </header>
-
-        <div class="dashboard-grid">
-            <?php foreach ($categories as $cat): 
-                if (empty($groupedTools[$cat['id']])) continue; 
-            ?>
-                <div class="category-column">
-                    <h2><?= htmlspecialchars($cat['name']) ?></h2>
-                    <div class="category-items">
-                        
-                        <?php foreach ($groupedTools[$cat['id']] as $tool): ?>
-                            <a href="<?= htmlspecialchars($tool['url']) ?>" class="card tool-card" target="_blank" data-url="<?= htmlspecialchars($tool['url']) ?>">
-                                
-                                <div class="status-badge status-ping">PING...</div>
-                                
-                                <div class="card-top">
-                                    <?php $iconPath = resolveIconUrl($tool['icon_url']); if (!empty($iconPath)): ?>
-                                        <img src="<?= $iconPath ?>" alt="">
-                                    <?php endif; ?>
-                                    
+    <main class="container">
+        <?php foreach ($categories as $category): ?>
+            <?php if (!empty($toolsByCategory[$category['id']])): ?>
+                <section class="category-section">
+                    <h2 class="category-title"><?= htmlspecialchars($category['name']) ?></h2>
+                    <div class="grid">
+                        <?php foreach ($toolsByCategory[$category['id']] as $tool): ?>
+                            <!-- Atributo data-id utilizado pelo JS para acionar o Ping Seguro -->
+                            <div class="card service-card" data-id="<?= $tool['id'] ?>">
+                                <a href="<?= htmlspecialchars($tool['url']) ?>" target="_blank" class="card-link">
+                                    <div class="card-icon">
+                                        <img src="<?= resolveIconUrl($tool['icon_url']) ?>" alt="Icon">
+                                    </div>
                                     <div class="card-content">
                                         <h3><?= htmlspecialchars($tool['name']) ?></h3>
                                         <?php if (!empty($tool['description'])): ?>
                                             <p><?= htmlspecialchars($tool['description']) ?></p>
                                         <?php endif; ?>
                                     </div>
+                                </a>
+                                <!-- Container do status do Ping -->
+                                <div class="ping-indicator">
+                                    <span class="ping-status" title="Checando status...">⏳</span>
                                 </div>
-
-                                <div class="error-block">
-                                    <strong>!</strong> <?= t('status_error') ?> / Offline
-                                </div>
-                            </a>
+                            </div>
                         <?php endforeach; ?>
-                        
                     </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
-
-        <footer class="notes-section">
-            <form method="POST" class="notes-form">
-                <input type="hidden" name="action" value="update_footer">
-                <label for="footer_text"><?= t('notes') ?></label>
-                <textarea name="footer_text" id="footer_text" placeholder="..."><?= htmlspecialchars($settings['footer_text'] ?? '') ?></textarea>
-                <button type="submit" class="btn"><?= t('save_notes') ?></button>
-            </form>
-        </footer>
-    </div>
+                </section>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </main>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-    
-            // 1. Efeito PROC para o botão salvar do Bloco de Notas
-            const notesForm = document.querySelector('.notes-form');
-            if (notesForm) {
-                notesForm.addEventListener('input', () => {
-                    const btn = notesForm.querySelector('button[type="submit"]');
-                    if (btn && !btn.classList.contains('btn-glow')) {
-                        btn.classList.add('btn-glow');
-                    }
-                });
-            }
-
-            // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
-            const cards = document.querySelectorAll('.tool-card');
-            const txtRunning = '<?= t('status_running') ?>';
-            const txtError = '<?= t('status_error') ?>';
+        document.addEventListener('DOMContentLoaded', function() {
+            // ==========================================
+            // LÓGICA DE PING VIA FETCH API
+            // ==========================================
+            const services = document.querySelectorAll('.service-card');
             
-            cards.forEach(card => {
-                const urlStr = card.getAttribute('data-url').trim();
-                const badge = card.querySelector('.status-badge');
-                const errorBlock = card.querySelector('.error-block');
+            services.forEach(service => {
+                const id = service.getAttribute('data-id');
+                const statusElement = service.querySelector('.ping-status');
+                
+                if (id && statusElement) {
+                    fetch(`index.php?action=ping&id=${id}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'online') {
+                                statusElement.innerHTML = '🟢';
+                            } else {
+                                statusElement.innerHTML = '🔴';
+                            }
+                        })
+                        .catch(error => {
+                            statusElement.innerHTML = '🔴';
+                        });
+                }
+            });
 
-                let queryUrl = '';
-
-                try {
-                    // Tenta processar como URL válida
-                    let urlObj = new URL(urlStr);
-                    
-                    // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
-                    // Usa action=ping no index.php agora
-                    if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
-                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
-                    } else {
-                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
-                    }
-                } catch (e) {
-                    // Fallback caso seja apenas IP:PORTA sem "http://" cadastrado
-                    const portMatch = urlStr.match(/:(\d+)$/);
-                    if (portMatch) {
-                        const parts = urlStr.split(':');
-                        const host = parts[0].replace('//', '');
-                        const port = portMatch[1];
-                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(host)}&port=${port}`;
-                    } else {
-                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
-                    }
+            // ==========================================
+            // LÓGICA DE TOGGLE DE TEMA (LIGHT/DARK)
+            // ==========================================
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                // Recupera preferência ao carregar a página
+                const savedTheme = localStorage.getItem('portal_theme');
+                if (savedTheme) {
+                    document.documentElement.style.setProperty('color-scheme', savedTheme);
                 }
 
-                fetch(queryUrl)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            badge.textContent = txtRunning;
-                            badge.className = 'status-badge status-ok';
-                            errorBlock.style.display = 'none';
-                        } else {
-                            badge.textContent = txtError;
-                            badge.className = 'status-badge status-error';
-                            errorBlock.style.display = 'block'; 
-                        }
-                    })
-                    .catch(() => {
-                        badge.textContent = txtError;
-                        badge.className = 'status-badge status-error';
-                        errorBlock.style.display = 'block';
-                    });
-            });
+                // Ação do botão
+                themeToggle.addEventListener('click', () => {
+                    const currentTheme = document.documentElement.style.getPropertyValue('color-scheme') || 'dark';
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    
+                    document.documentElement.style.setProperty('color-scheme', newTheme);
+                    localStorage.setItem('portal_theme', newTheme);
+                });
+            }
         });
     </script>
 </body>
