@@ -38,6 +38,13 @@ $currentLang = $settings['language'] ?? 'pt';
 <head>
     <meta charset="UTF-8">
     <title><?= t('manage_services') ?></title>
+    
+    <!-- INÍCIO DO FAVICON -->
+    <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
+        <link rel="icon" href="<?= $favicon ?>">
+    <?php endif; ?>
+    <!-- FIM DO FAVICON -->
+
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); --text-color: <?= htmlspecialchars($settings['text_color']) ?>; }</style>
 </head>

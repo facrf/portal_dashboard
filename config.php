@@ -192,6 +192,13 @@ $currentLang = $settings['language'] ?? 'pt';
 <head>
     <meta charset="UTF-8">
     <title><?= t('appearance_tabs') ?></title>
+    
+    <!-- INÍCIO DO FAVICON -->
+    <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
+        <link rel="icon" href="<?= $favicon ?>">
+    <?php endif; ?>
+    <!-- FIM DO FAVICON -->
+
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>:root { --bg-color: <?= $bgColorValue ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); --text-color: <?= $textColorValue ?>; }</style>
 </head>
