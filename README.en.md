@@ -76,7 +76,7 @@ services:
       - "8080:80" # Port where the dashboard will be accessible (change if necessary)
     volumes:
       # Map the folder where your SQLite database will be saved persistently
-      - /path/on/your/server/database:/var/www/html/database
+      - /path/on/your/server/database:/var/www/database
       # Map custom icons .png, .jpg, etc.
       - /path/on/your/server/icons:/var/www/html/icons
     restart: unless-stopped

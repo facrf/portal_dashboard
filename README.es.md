@@ -81,7 +81,7 @@ services:
       - "8080:80" # Puerto donde el panel estará accesible (cámbialo si es necesario)
     volumes:
       # Mapea la carpeta donde se guardará tu base de datos SQLite de forma persistente
-      - /ruta/en/tu/servidor/database:/var/www/html/database
+      - /ruta/en/tu/servidor/database:/var/www/database
       # Mapea los iconos personalizados .png, .jpg, etc.
       - /ruta/en/tu/servidor/icons:/var/www/html/icons
     restart: unless-stopped

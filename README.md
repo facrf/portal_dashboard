@@ -79,10 +79,10 @@ services:
     ports:
       - "8080:80" # Porta onde o painel ficará acessível (mude se necessário)
     volumes:
-      # Mapeie a pasta onde seu banco SQLite ficará salvo de forma persistente
-      - /caminho/no/seu/servidor/database:/var/www/html/database
-      # Mapeia os icones personalizados .png , .jpg, etc.
-      - /caminho/no/seu/servidor/icons:/var/www/html/icons
+      # Novo mapeamento seguro para o banco de dados
+      - /seu_caminho/banco_portal:/var/www/db_data
+      # Mantém o mapeamento dos ícones normal
+      - /seu_caminho/icons:/var/www/html/icons
     restart: unless-stopped
     
 
