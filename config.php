@@ -3,22 +3,6 @@
 require_once 'db.php';
 
 // ==========================================
-// MÓDULO DE EXPORTAÇÃO DE BACKUP (JSON)
-// ==========================================
-if (isset($_GET['action']) && $_GET['action'] === 'export') {
-    $data = [
-        'format' => 'meu_portal_v1',
-        'settings' => $pdo->query("SELECT * FROM settings LIMIT 1")->fetch(),
-        'categories' => $pdo->query("SELECT * FROM categories")->fetchAll(),
-        'tools' => $pdo->query("SELECT * FROM tools")->fetchAll()
-    ];
-    header('Content-Type: application/json; charset=utf-8');
-    header('Content-Disposition: attachment; filename="portal_backup_' . date('Y-m-d_H-i') . '.json"');
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-// ==========================================
 // PROCESSAMENTO DE FORMULÁRIOS (POST)
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

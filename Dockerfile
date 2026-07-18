@@ -31,5 +31,5 @@ EXPOSE 80
 # Define o entrypoint[cite: 1]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# O comando final agora não é mais o Apache, e sim o Supervisor![cite: 1]
+# O comando final agora não é mais o Apache, e sim o Supervisor!
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

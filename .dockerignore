@@ -1,0 +1,19 @@
+# Controle de versão e metadados de desenvolvimento
+.git
+.github
+.gitignore
+.dockerignore
+.agents
+.codex
+
+# Segredos e dados locais
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+db_data
+
+# Arquivos sem uso em tempo de execução
+*.md
+LICENSE

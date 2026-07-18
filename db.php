@@ -32,9 +32,6 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOIN
 // Tabela de Autenticação
 $pdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)");
 
-// Tabela de Autenticação
-$pdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)");
-
 // TABELA ANTI BRUTE-FORCE
 $pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT PRIMARY KEY, attempts INTEGER, last_attempt INTEGER)");
 
@@ -82,6 +79,11 @@ if (session_status() === PHP_SESSION_NONE) {
         'samesite' => 'Strict'   
     ]);
     session_start();
+}
+
+// Gera um token CSRF por sessão antes de qualquer formulário ou validação.
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // ==========================================
@@ -132,7 +134,7 @@ if ($currentFile !== 'login.php') {
 // ==========================================
 // HEADERS DE SEGURANÇA (HARDENING ADMINISTRATIVO)
 // ==========================================
-$adminPages = ['admin.php', 'config.php'];
+$adminPages = ['admin.php', 'config.php', 'login.php'];
 
 if (in_array($currentFile, $adminPages)) {
     // 1. CSP & X-Frame-Options: Bloqueia Clickjacking (impede que o painel seja embutido em iframes ocultos)
