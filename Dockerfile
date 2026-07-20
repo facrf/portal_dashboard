@@ -2,7 +2,7 @@
 FROM php:8.3-fpm-alpine
 
 # Instala o Nginx, Supervisor e as bibliotecas do SQLite[cite: 1]
-RUN apk add --no-cache nginx supervisor sqlite-dev && \
+RUN apk add --no-cache nginx supervisor sqlite-dev ca-certificates && \
     docker-php-ext-install pdo pdo_sqlite
 
 # Copia as configurações do Nginx e do Supervisor para dentro do Linux[cite: 1]

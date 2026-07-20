@@ -1,0 +1,16 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^icons/.*\.(php|phtml|phar)(/.*)?$ - [F,NC,L]
+</IfModule>
+
+<FilesMatch "(^\.|\.(db|sqlite|sqlite3|sql|bak)$)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+</IfModule>

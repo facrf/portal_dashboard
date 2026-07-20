@@ -35,14 +35,15 @@ class Pinger {
     public static function check($params) {
         // 1. Método de teste para portas (Bancos de dados, NTP, etc.)
         if (isset($params['host']) && isset($params['port'])) {
-            $host = filter_var($params['host'], FILTER_SANITIZE_URL);
+            $host = trim($params['host']);
             $port = intval($params['port']);
 
             // Limpa possíveis protocolos inseridos no host
             $host = preg_replace('~^https?://~i', '', $host);
             $host = preg_replace('~^udp://~i', '', $host);
 
-            if (!empty($host) && $port > 0) {
+            if (filter_var($host, FILTER_VALIDATE_IP) || preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $host)) {
+                if ($port < 1 || $port > 65535) return false;
                 if ($port === 123) {
                     return self::testNtpServer($host, $port);
                 } else {
@@ -59,17 +60,21 @@ class Pinger {
 
         // 2. Método padrão: teste HTTP HEAD (Para sites e web apps normais)
         if (isset($params['url'])) {
-            $url = filter_var($params['url'], FILTER_SANITIZE_URL);
-            if ($url) {
+            $url = trim($params['url']);
+            $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+            if (filter_var($url, FILTER_VALIDATE_URL) && in_array($scheme, ['http', 'https'], true)) {
                 $context = stream_context_create([
                     'http' => [
                         'method' => 'HEAD',
                         'timeout' => 2,
-                        'ignore_errors' => true
+                        'ignore_errors' => true,
+                        'follow_location' => 0,
+                        'max_redirects' => 0
                     ],
                     'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false
+                        'verify_peer' => true,
+                        'verify_peer_name' => true,
+                        'allow_self_signed' => false
                     ]
                 ]);
 
@@ -101,11 +106,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url = ?");
         $stmt->execute([$_GET['url']]);
         $isAllowed = $stmt->fetchColumn() > 0;
-    } elseif (!empty($_GET['host'])) {
-        // Se for IP/Host + Porta, verifica se o host faz parte de alguma URL cadastrada
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url LIKE ?");
-        $stmt->execute(['%' . $_GET['host'] . '%']);
-        $isAllowed = $stmt->fetchColumn() > 0;
+    } elseif (!empty($_GET['host']) && isset($_GET['port'])) {
+        // Compara host e porta analisados, evitando correspondência parcial via LIKE.
+        $requestedHost = strtolower(rtrim(trim($_GET['host']), '.'));
+        $requestedPort = (int) $_GET['port'];
+        foreach ($pdo->query("SELECT url FROM tools")->fetchAll(PDO::FETCH_COLUMN) as $registeredUrl) {
+            $registeredHost = strtolower(rtrim((string) parse_url($registeredUrl, PHP_URL_HOST), '.'));
+            $registeredPort = parse_url($registeredUrl, PHP_URL_PORT);
+            if ($registeredHost === $requestedHost && (int) $registeredPort === $requestedPort) {
+                $isAllowed = true;
+                break;
+            }
+        }
     }
 
     if (!$isAllowed) {

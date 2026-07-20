@@ -21,4 +21,6 @@ Thumbs.db
 
 # Ignorar icones
 icons/
-/icons/
+!icons/
+icons/*
+!icons/.htaccess

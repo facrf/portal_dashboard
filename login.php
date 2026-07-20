@@ -24,21 +24,9 @@ $isFirstAccess = ($userCount == 0);
 $error = '';
 
 // ==========================================
-// RECUPERAÇÃO DE IP REAL (PROXY/CLOUDFLARE)
-// ==========================================
-if (isset($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-    $ip = $_SERVER['HTTP_CF_CONNECTING_IP'];
-} elseif (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-    // Pega o primeiro IP da lista de proxies
-    $ip = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
-} else {
-    $ip = $_SERVER['REMOTE_ADDR'];
-}
-
-// ==========================================
 // SISTEMA ANTI BRUTE-FORCE (RATE LIMITING)
 // ==========================================
-$ip = $_SERVER['REMOTE_ADDR'];
+$ip = getClientIp();
 $maxAttempts = 5;
 $lockoutTime = 900; // 15 minutos em segundos
 
@@ -76,11 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // ==========================================
             // PREVENÇÃO DE SEQUESTRO DO BOOTSTRAP INICIAL
             // ==========================================
-            // FILTER_FLAG_NO_PRIV_RANGE falha (retorna false) se o IP FOR privado (192.168.x.x, 10.x.x.x, etc).
-            // Portanto, se retornar uma string IP, significa que é um IP PÚBLICO.
-            $isPublicIp = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-            
-            if ($isPublicIp && $ip !== '127.0.0.1' && $ip !== '::1') {
+            // O primeiro cadastro exige que tanto o cliente quanto o proxy sejam locais/privados.
+            // Assim, LAN direta e proxy local funcionam, mas um acesso público encaminhado é bloqueado.
+            $peerIp = $_SERVER['REMOTE_ADDR'] ?? '';
+            $isLocalSetup = isLocalOrPrivateIp($peerIp) && isLocalOrPrivateIp($ip);
+
+            if (!$isLocalSetup) {
                 die("<div style='background:#1e1e2e; color:#ff4d4d; padding:2rem; text-align:center; font-family:sans-serif; border-radius: 8px; max-width: 500px; margin: 10vh auto;'>
                     <h2>Ação Bloqueada</h2>
                     <p>Por segurança, o cadastro inicial do administrador não pode ser feito via internet (IP Público).</p>
@@ -96,7 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hash = password_hash($password, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
                 $stmt->execute([$username, $hash]);
-                
+
+                session_regenerate_id(true);
                 $_SESSION['logged_in'] = true;
                 $_SESSION['username'] = $username;
                 header("Location: index.php");

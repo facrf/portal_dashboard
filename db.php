@@ -55,18 +55,57 @@ if ($pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn() == 0) {
 // ==========================================
 // SEGURANÇA: SESSÃO DINÂMICA E COOKIES HTTPS
 // ==========================================
-$sessionDays = $pdo->query("SELECT session_days FROM settings LIMIT 1")->fetchColumn();
-if (!$sessionDays) $sessionDays = 7;
-$lifetime = $sessionDays * 86400; 
+$sessionDays = (int) $pdo->query("SELECT session_days FROM settings LIMIT 1")->fetchColumn();
+$sessionDays = min(365, max(1, $sessionDays ?: 7));
+$lifetime = $sessionDays * 86400;
 
-// Detecção avançada de HTTPS (Cobre Proxy Reverso e Cloudflare Tunnels)
-$isSecure = false;
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-    $isSecure = true;
-} elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-    $isSecure = true; // Detecta proxy padrão
-} elseif (!empty($_SERVER['HTTP_CF_VISITOR']) && strpos($_SERVER['HTTP_CF_VISITOR'], 'https') !== false) {
-    $isSecure = true; // Detecta túnel Cloudflare especificamente
+function isLocalOrPrivateIp($ip) {
+    if (!filter_var($ip, FILTER_VALIDATE_IP)) return false;
+
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $value = ip2long($ip);
+        return (($value & 0xff000000) === 0x0a000000)       // 10.0.0.0/8
+            || (($value & 0xfff00000) === 0xac100000)      // 172.16.0.0/12
+            || (($value & 0xffff0000) === 0xc0a80000)      // 192.168.0.0/16
+            || (($value & 0xff000000) === 0x7f000000)      // loopback
+            || (($value & 0xffff0000) === 0xa9fe0000);     // link-local
+    }
+
+    $packed = inet_pton($ip);
+    if ($packed === false) return false;
+    if ($packed === inet_pton('::1')) return true;
+
+    $first = ord($packed[0]);
+    $second = ord($packed[1]);
+    return (($first & 0xfe) === 0xfc)                      // fc00::/7
+        || ($first === 0xfe && ($second & 0xc0) === 0x80); // fe80::/10
+}
+
+// Cabeçalhos encaminhados só são aceitos quando a conexão veio de um proxy interno.
+function getClientIp() {
+    $peerIp = filter_var($_SERVER['REMOTE_ADDR'] ?? '', FILTER_VALIDATE_IP);
+    if (!$peerIp) return '0.0.0.0';
+
+    if (isLocalOrPrivateIp($peerIp)) {
+        $candidates = [];
+        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) $candidates[] = trim($_SERVER['HTTP_CF_CONNECTING_IP']);
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) $candidates[] = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+        foreach ($candidates as $candidate) {
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) return $candidate;
+        }
+    }
+    return $peerIp;
+}
+
+// Cabeçalhos de HTTPS também só são confiáveis quando enviados por proxy interno.
+$isSecure = isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) === 'on';
+if (!$isSecure && isLocalOrPrivateIp($_SERVER['REMOTE_ADDR'] ?? '')) {
+    if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0])) === 'https') {
+        $isSecure = true;
+    } elseif (!empty($_SERVER['HTTP_CF_VISITOR'])) {
+        $cfVisitor = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
+        $isSecure = is_array($cfVisitor) && ($cfVisitor['scheme'] ?? '') === 'https';
+    }
 }
 
 if (session_status() === PHP_SESSION_NONE) {

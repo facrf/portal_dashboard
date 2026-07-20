@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // CONFIGURAÇÃO DE SESSÃO
     elseif ($action === 'update_session') {
-        $days = max(1, intval($_POST['session_days']));
+        $days = min(365, max(1, intval($_POST['session_days'] ?? 7)));
         $pdo->prepare("UPDATE settings SET session_days=? WHERE id=1")->execute([$days]);
         header("Location: admin.php#user-panel"); exit;
     }
@@ -194,7 +194,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap: wrap;">
                     <div class="form-group" style="flex:1; min-width: 200px; margin-bottom:0;">
                         <label>Tempo para a sessão expirar (Dias):</label>
-                        <input type="number" name="session_days" value="<?= $settings['session_days'] ?? 7 ?>" min="1" required>
+                        <input type="number" name="session_days" value="<?= $settings['session_days'] ?? 7 ?>" min="1" max="365" required>
                     </div>
                     <button type="submit" class="btn">Salvar Alteração</button>
                 </div>

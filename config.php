@@ -31,15 +31,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // MÓDULO DE IMPORTAÇÃO (Nativo, Heimdall, Homepage)
     if (isset($_POST['action']) && $_POST['action'] === 'import') {
         if (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+            $maxImportBytes = 5 * 1024 * 1024;
+            if ((int) $_FILES['import_file']['size'] > $maxImportBytes) {
+                http_response_code(413);
+                die("Arquivo de importação muito grande. O limite é 5 MB.");
+            }
             $fileContent = file_get_contents($_FILES['import_file']['tmp_name']);
+            if ($fileContent === false || strlen($fileContent) > $maxImportBytes) {
+                http_response_code(400);
+                die("Não foi possível ler o arquivo de importação.");
+            }
             $ext = strtolower(pathinfo($_FILES['import_file']['name'], PATHINFO_EXTENSION));
 
             if ($ext === 'json') {
                 $json = json_decode($fileContent, true);
-                
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($json)) {
+                    http_response_code(400);
+                    die("Arquivo JSON inválido.");
+                }
+
                 // 1. IMPORTAÇÃO NATIVA (Restore Completo com Transação)
                 if (isset($json['format']) && $json['format'] === 'meu_portal_v1') {
                     if (isset($json['categories']) && is_array($json['categories']) && isset($json['tools']) && is_array($json['tools'])) {
+                        if (count($json['categories']) > 500 || count($json['tools']) > 5000) {
+                            http_response_code(413);
+                            die("O backup excede o limite de 500 categorias ou 5.000 serviços.");
+                        }
                         try {
                             $pdo->beginTransaction();
 
@@ -97,6 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $items = isset($json['apps']) ? $json['apps'] : (is_array($json) ? $json : []);
                     
                     if (!empty($items)) {
+                        if (count($items) > 5000) {
+                            http_response_code(413);
+                            die("A importação excede o limite de 5.000 serviços.");
+                        }
                         $pdo->exec("INSERT INTO categories (name) VALUES ('Importado: Heimdall')");
                         $catId = $pdo->lastInsertId();
                         
@@ -118,6 +139,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 3. IMPORTAÇÃO DO HOMEPAGE DASHBOARD (Parser YAML Customizado)
             elseif ($ext === 'yaml' || $ext === 'yml') {
                 $lines = explode("\n", $fileContent);
+                if (count($lines) > 20000) {
+                    http_response_code(413);
+                    die("O arquivo YAML excede o limite de 20.000 linhas.");
+                }
                 $currentCatId = 1;
                 $currentApp = null;
                 $currentAppProps = [];
