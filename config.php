@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         } catch (Exception $e) {
                             $pdo->rollBack();
-                            die("Erro na importação. O banco de dados foi preservado. Detalhe: " . htmlspecialchars($e->getMessage()));
+                            die("Erro na importação. O banco de dados foi preservado. Detalhe: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
                         }
                     }
                 } 
@@ -237,12 +237,12 @@ if (isset($_GET['edit_cat'])) {
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
 
-$bgColorValue = !empty($settings['bg_color']) ? htmlspecialchars($settings['bg_color']) : '#000000';
-$textColorValue = !empty($settings['text_color']) ? htmlspecialchars($settings['text_color']) : '#ffffff';
+$bgColorValue = !empty($settings['bg_color']) ? htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') : '#000000';
+$textColorValue = !empty($settings['text_color']) ? htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') : '#ffffff';
 $currentLang = $settings['language'] ?? 'pt';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLang) ?>">
+<html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
     <meta charset="UTF-8">
     <title><?= t('appearance_tabs') ?></title>
@@ -254,7 +254,7 @@ $currentLang = $settings['language'] ?? 'pt';
     <!-- FIM DO FAVICON -->
 
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
-    <style>:root { --bg-color: <?= $bgColorValue ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image']) ?>'); --text-color: <?= $textColorValue ?>; }</style>
+    <style>:root { --bg-color: <?= $bgColorValue ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>'); --text-color: <?= $textColorValue ?>; }</style>
 </head>
 <body>
     <script>
@@ -295,12 +295,12 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel">
             <h2><?= t('settings') ?></h2>
             <form method="POST">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="update_settings">
                 
                 <div class="form-group">
                     <label><?= t('portal_name') ?>:</label>
-                    <input type="text" name="portal_name" value="<?= htmlspecialchars($settings['portal_name']) ?>" required>
+                    <input type="text" name="portal_name" value="<?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?>" required>
                 </div>
                 
                 <div class="form-group">
@@ -314,7 +314,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 
                 <div class="form-group">
                     <label>Favicon (<?= t('Ícone do Navegador - /icons ou URL') ?>):</label>
-                    <input type="text" name="favicon" value="<?= htmlspecialchars($settings['favicon']) ?>">
+                    <input type="text" name="favicon" value="<?= htmlspecialchars($settings['favicon'], ENT_QUOTES, 'UTF-8') ?>">
                 </div>
 
                 <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1rem;">
@@ -331,7 +331,7 @@ $currentLang = $settings['language'] ?? 'pt';
 
                 <div class="form-group">
                     <label><?= t('URL / Nome Imagem de Fundo') ?>:</label>
-                    <input type="text" name="bg_image" value="<?= htmlspecialchars($settings['bg_image']) ?>">
+                    <input type="text" name="bg_image" value="<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>">
                 </div>
                 
                 <button type="submit" class="btn"><?= t('save_changes') ?></button>
@@ -366,7 +366,7 @@ $currentLang = $settings['language'] ?? 'pt';
                     </ul>
                     
                     <form method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="action" value="import">
                         <input type="file" name="import_file" accept=".json,.yaml,.yml" required style="flex:1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 6px; color: var(--text-color);">
                         <button type="submit" class="btn btn-glow"><?= t('Importar') ?></button>
@@ -379,13 +379,13 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel" id="cat-panel">
             <h2><?= t('Gerenciar Categorias (Abas)') ?></h2>
             <form method="POST" style="display:flex; gap:10px; align-items:flex-end; margin-bottom: 2rem;">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="<?= $editCatMode ? 'edit_category' : 'add_category' ?>">
                 <?php if ($editCatMode): ?><input type="hidden" name="cat_id" value="<?= $editCat['id'] ?>"><?php endif; ?>
                 
                 <div class="form-group" style="flex:1; margin-bottom:0;">
                     <label><?= $editCatMode ? t('Editar Nome da Categoria') . ':' : t('Nova Categoria') . ':' ?></label>
-                    <input type="text" name="cat_name" value="<?= $editCatMode ? htmlspecialchars($editCat['name']) : '' ?>" required>
+                    <input type="text" name="cat_name" value="<?= $editCatMode ? htmlspecialchars($editCat['name'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
                 <button type="submit" class="btn"><?= $editCatMode ? t('save_changes') : t('Adicionar') ?></button>
                 <?php if ($editCatMode): ?><a href="config.php" class="btn"><?= t('Cancelar') ?></a><?php endif; ?>
@@ -396,12 +396,12 @@ $currentLang = $settings['language'] ?? 'pt';
                 <tbody>
                     <?php foreach ($categories as $cat): ?>
                         <tr style="<?= ($editCatMode && $editCat['id'] == $cat['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
-                            <td style="font-weight: bold;"><?= htmlspecialchars($cat['name']) ?></td>
+                            <td style="font-weight: bold;"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td>
                                 <div class="action-buttons">
                                     <a href="config.php?edit_cat=<?= $cat['id'] ?>#cat-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
                                     <form method="POST" style="margin:0;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="action" value="delete_category">
                                         <input type="hidden" name="cat_id" value="<?= $cat['id'] ?>">
                                         <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('Excluir aba? Serviços serão movidos para outra.') ?>');"><?= t('delete') ?></button>

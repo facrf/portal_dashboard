@@ -276,8 +276,8 @@ function resolveIconUrl($icon) {
     $icon = trim($icon);
     if (empty($icon)) return '';
     if (preg_match('~^(https?://|data:|/|\\.\\./|\\./)~i', $icon) || strpos($icon, '/') !== false) { 
-        return htmlspecialchars($icon); 
+        return htmlspecialchars($icon, ENT_QUOTES, 'UTF-8'); 
     }
-    return htmlspecialchars('icons/' . $icon);
+    return htmlspecialchars('icons/' . $icon, ENT_QUOTES, 'UTF-8');
 }
 ?>

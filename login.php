@@ -134,11 +134,11 @@ $currentLang = $settings['language'] ?? 'pt';
 
 <!-- ... O Restante do HTML do seu login.php vem aqui para baixo ... -->
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLang) ?>">
+<html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isFirstAccess ? 'Primeiro Acesso' : 'Login' ?> - <?= htmlspecialchars($settings['portal_name']) ?></title>
+    <title><?= $isFirstAccess ? 'Primeiro Acesso' : 'Login' ?> - <?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>
     
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
         <link rel="icon" href="<?= $favicon ?>">
@@ -147,9 +147,9 @@ $currentLang = $settings['language'] ?? 'pt';
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>
         :root { 
-            --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; 
-            --bg-image: <?= !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image']) . "')" : 'none' ?>; 
-            --text-color: <?= htmlspecialchars($settings['text_color']) ?>; 
+            --bg-color: <?= htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') ?>; 
+            --bg-image: <?= !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') . "')" : 'none' ?>; 
+            --text-color: <?= htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') ?>; 
         }
         .login-container {
             max-width: 400px;
@@ -178,11 +178,11 @@ $currentLang = $settings['language'] ?? 'pt';
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="error-msg"><?= htmlspecialchars($error) ?></div>
+                <div class="error-msg"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
 
             <form method="POST">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <div class="form-group">
                     <label>Usuário:</label>
                     <input type="text" name="username" required autofocus autocomplete="username">

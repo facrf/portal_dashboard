@@ -99,7 +99,7 @@ $usersList = $pdo->query("SELECT id, username FROM users ORDER BY username ASC")
 $currentLang = $settings['language'] ?? 'pt';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLang) ?>">
+<html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
     <meta charset="UTF-8">
     <title><?= t('manage_services') ?></title>
@@ -107,7 +107,7 @@ $currentLang = $settings['language'] ?? 'pt';
         <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
-    <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color']) ?>; --bg-image: <?= !empty($settings['bg_image']) ? "url('".htmlspecialchars($settings['bg_image'])."')" : 'none' ?>; --text-color: <?= htmlspecialchars($settings['text_color']) ?>; }</style>
+    <style>:root { --bg-color: <?= htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') ?>; --bg-image: <?= !empty($settings['bg_image']) ? "url('".htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8')."')" : 'none' ?>; --text-color: <?= htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') ?>; }</style>
 </head>
 <body>
     <script>
@@ -144,13 +144,13 @@ $currentLang = $settings['language'] ?? 'pt';
         <div class="admin-panel" id="form-panel">
             <h2><?= $editMode ? t('edit') . ' Serviço' : t('add_service') ?></h2>
             <form method="POST" action="admin.php">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="<?= $editMode ? 'edit_tool' : 'add_tool' ?>">
                 <?php if ($editMode): ?><input type="hidden" name="tool_id" value="<?= $editTool['id'] ?>"><?php endif; ?>
 
                 <div class="form-group">
                     <label><?= t('Nome do Serviço') ?>:</label>
-                    <input type="text" name="name" value="<?= $editMode ? htmlspecialchars($editTool['name']) : '' ?>" required>
+                    <input type="text" name="name" value="<?= $editMode ? htmlspecialchars($editTool['name'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
                 
                 <div class="form-group">
@@ -158,7 +158,7 @@ $currentLang = $settings['language'] ?? 'pt';
                     <select name="category_id" required>
                         <?php foreach ($categories as $cat): ?>
                             <option value="<?= $cat['id'] ?>" <?= ($editMode && $editTool['category_id'] == $cat['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($cat['name']) ?>
+                                <?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -166,15 +166,15 @@ $currentLang = $settings['language'] ?? 'pt';
 
                 <div class="form-group">
                     <label><?= t('URL de Destino') ?>:</label>
-                    <input type="text" name="url" value="<?= $editMode ? htmlspecialchars($editTool['url']) : '' ?>" required>
+                    <input type="text" name="url" value="<?= $editMode ? htmlspecialchars($editTool['url'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
                 <div class="form-group">
                     <label><?= t('Ícone') ?> (URL / /icons):</label>
-                    <input type="text" name="icon_url" value="<?= $editMode ? htmlspecialchars($editTool['icon_url']) : '' ?>">
+                    <input type="text" name="icon_url" value="<?= $editMode ? htmlspecialchars($editTool['icon_url'], ENT_QUOTES, 'UTF-8') : '' ?>">
                 </div>
                 <div class="form-group">
                     <label><?= t('Descrição Curta') ?>:</label>
-                    <textarea name="description" rows="2"><?= $editMode ? htmlspecialchars($editTool['description']) : '' ?></textarea>
+                    <textarea name="description" rows="2"><?= $editMode ? htmlspecialchars($editTool['description'], ENT_QUOTES, 'UTF-8') : '' ?></textarea>
                 </div>
                 
                 <div>
@@ -189,7 +189,7 @@ $currentLang = $settings['language'] ?? 'pt';
             <h2>Gestão de Acesso</h2>
             
             <form method="POST" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="update_session">
                 <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap: wrap;">
                     <div class="form-group" style="flex:1; min-width: 200px; margin-bottom:0;">
@@ -201,7 +201,7 @@ $currentLang = $settings['language'] ?? 'pt';
             </form>
 
             <form method="POST" style="display:flex; gap:15px; align-items:flex-end; margin-bottom: 2rem; flex-wrap: wrap;">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="<?= $editUserMode ? 'edit_user' : 'add_user' ?>">
                 <?php if ($editUserMode): ?><input type="hidden" name="user_id" value="<?= $editUser['id'] ?>"><?php endif; ?>
                 
@@ -233,10 +233,10 @@ $currentLang = $settings['language'] ?? 'pt';
                                     <a href="admin.php?edit_user=<?= $usr['id'] ?>#user-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem">Editar</a>
                                     <?php if (count($usersList) > 1): ?>
                                         <form method="POST" style="margin:0;">
-                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                             <input type="hidden" name="action" value="delete_user">
                                             <input type="hidden" name="user_id" value="<?= $usr['id'] ?>">
-                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('Excluir usuário <?= htmlspecialchars($usr['username'], ENT_QUOTES) ?>?');">Excluir</button>
+                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('Excluir usuário <?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?>?');">Excluir</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>
@@ -268,12 +268,12 @@ $currentLang = $settings['language'] ?? 'pt';
                                 <?php endif; ?>
                             </td>
                             <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($tool['cat_name']) ?></td>
+                            <td><?= htmlspecialchars($tool['cat_name'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td>
                                 <div class="action-buttons">
                                     <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
                                     <form method="POST" style="margin:0;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="action" value="delete_tool">
                                         <input type="hidden" name="tool_id" value="<?= $tool['id'] ?>">
                                         <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm(<?= htmlspecialchars(json_encode(t('delete') . ' \'' . $tool['name'] . '\'?'), ENT_QUOTES, 'UTF-8') ?>);"><?= t('delete') ?></button>
