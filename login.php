@@ -67,13 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // O primeiro cadastro exige que tanto o cliente quanto o proxy sejam locais/privados.
             // Assim, LAN direta e proxy local funcionam, mas um acesso público encaminhado é bloqueado.
             $peerIp = $_SERVER['REMOTE_ADDR'] ?? '';
-            $isLocalSetup = isLocalOrPrivateIp($peerIp) && isLocalOrPrivateIp($ip);
+            $isLocalSetup = isLocalOrPrivateIp($peerIp)
+                && isLocalOrPrivateIp($ip)
+                && !hasUntrustedProxyHeaders();
 
             if (!$isLocalSetup) {
                 die("<div style='background:#1e1e2e; color:#ff4d4d; padding:2rem; text-align:center; font-family:sans-serif; border-radius: 8px; max-width: 500px; margin: 10vh auto;'>
                     <h2>Ação Bloqueada</h2>
-                    <p>Por segurança, o cadastro inicial do administrador não pode ser feito via internet (IP Público).</p>
-                    <p>Acesse o painel localmente pela LAN (ex: <i>192.168.x.x</i>) para realizar o setup.</p>
+                    <p>Por segurança, o cadastro inicial exige acesso local e não aceita cabeçalhos de proxy não confiável.</p>
+                    <p>Acesse diretamente pela LAN (ex: <i>192.168.x.x</i>) ou configure corretamente
+                    <code>PORTAL_TRUSTED_PROXIES</code> antes de realizar o setup.</p>
                 </div>");
             }
 

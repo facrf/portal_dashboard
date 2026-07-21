@@ -81,30 +81,91 @@ function isLocalOrPrivateIp($ip) {
         || ($first === 0xfe && ($second & 0xc0) === 0x80); // fe80::/10
 }
 
-// Cabeçalhos encaminhados só são aceitos quando a conexão veio de um proxy interno.
+// Compara um IP com um endereço ou bloco CIDR (IPv4 e IPv6).
+function ipMatchesRange($ip, $range) {
+    $ip = trim($ip);
+    $range = trim($range);
+    if (!filter_var($ip, FILTER_VALIDATE_IP) || $range === '') return false;
+
+    if (strpos($range, '/') === false) {
+        $ipPacked = inet_pton($ip);
+        $rangePacked = inet_pton($range);
+        return $ipPacked !== false && $rangePacked !== false && hash_equals($rangePacked, $ipPacked);
+    }
+
+    [$network, $prefix] = array_pad(explode('/', $range, 2), 2, null);
+    if (!filter_var($network, FILTER_VALIDATE_IP) || !ctype_digit((string) $prefix)) return false;
+
+    $ipPacked = inet_pton($ip);
+    $networkPacked = inet_pton($network);
+    if ($ipPacked === false || $networkPacked === false || strlen($ipPacked) !== strlen($networkPacked)) return false;
+
+    $prefix = (int) $prefix;
+    $maxBits = strlen($ipPacked) * 8;
+    if ($prefix < 0 || $prefix > $maxBits) return false;
+
+    $wholeBytes = intdiv($prefix, 8);
+    $remainingBits = $prefix % 8;
+    if ($wholeBytes > 0 && substr($ipPacked, 0, $wholeBytes) !== substr($networkPacked, 0, $wholeBytes)) return false;
+    if ($remainingBits === 0) return true;
+
+    $mask = (0xff << (8 - $remainingBits)) & 0xff;
+    return (ord($ipPacked[$wholeBytes]) & $mask) === (ord($networkPacked[$wholeBytes]) & $mask);
+}
+
+// Somente peers configurados explicitamente podem fornecer cabeçalhos encaminhados.
+// Exemplo: PORTAL_TRUSTED_PROXIES=172.20.0.10,10.10.0.0/24
+function isTrustedProxyIp($ip) {
+    static $trustedRanges = null;
+    if ($trustedRanges === null) {
+        $configured = getenv('PORTAL_TRUSTED_PROXIES');
+        $trustedRanges = $configured === false || trim($configured) === ''
+            ? []
+            : preg_split('/[\\s,]+/', trim($configured), -1, PREG_SPLIT_NO_EMPTY);
+    }
+
+    foreach ($trustedRanges as $range) {
+        if (ipMatchesRange($ip, $range)) return true;
+    }
+    return false;
+}
+
+function hasUntrustedProxyHeaders() {
+    $peerIp = filter_var($_SERVER['REMOTE_ADDR'] ?? '', FILTER_VALIDATE_IP);
+    if (!$peerIp || isTrustedProxyIp($peerIp)) return false;
+
+    return !empty($_SERVER['HTTP_X_FORWARDED_FOR'])
+        || !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
+        || !empty($_SERVER['HTTP_CF_VISITOR']);
+}
+
 function getClientIp() {
     $peerIp = filter_var($_SERVER['REMOTE_ADDR'] ?? '', FILTER_VALIDATE_IP);
     if (!$peerIp) return '0.0.0.0';
 
-    if (isLocalOrPrivateIp($peerIp)) {
-        $candidates = [];
-        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) $candidates[] = trim($_SERVER['HTTP_CF_CONNECTING_IP']);
-        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) $candidates[] = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
-        foreach ($candidates as $candidate) {
-            if (filter_var($candidate, FILTER_VALIDATE_IP)) return $candidate;
-        }
+    if (!isTrustedProxyIp($peerIp) || empty($_SERVER['HTTP_X_FORWARDED_FOR'])) return $peerIp;
+
+    $forwardedIps = [];
+    foreach (explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']) as $candidate) {
+        $candidate = trim($candidate);
+        if (filter_var($candidate, FILTER_VALIDATE_IP)) $forwardedIps[] = $candidate;
     }
-    return $peerIp;
+
+    // O proxy confiável deve sobrescrever ou anexar o IP real. Lendo da direita
+    // para a esquerda, valores forjados à esquerda não substituem o cliente real.
+    for ($i = count($forwardedIps) - 1; $i >= 0; $i--) {
+        if (!isTrustedProxyIp($forwardedIps[$i])) return $forwardedIps[$i];
+    }
+
+    return $forwardedIps[0] ?? $peerIp;
 }
 
-// Cabeçalhos de HTTPS também só são confiáveis quando enviados por proxy interno.
+// O protocolo encaminhado segue a mesma lista explícita de confiança.
 $isSecure = isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) === 'on';
-if (!$isSecure && isLocalOrPrivateIp($_SERVER['REMOTE_ADDR'] ?? '')) {
+if (!$isSecure && isTrustedProxyIp($_SERVER['REMOTE_ADDR'] ?? '')) {
     if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0])) === 'https') {
         $isSecure = true;
-    } elseif (!empty($_SERVER['HTTP_CF_VISITOR'])) {
-        $cfVisitor = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
-        $isSecure = is_array($cfVisitor) && ($cfVisitor['scheme'] ?? '') === 'https';
     }
 }
 

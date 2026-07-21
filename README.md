@@ -89,6 +89,15 @@ services:
 
 ```
 
+Se o portal estiver atrás de um proxy reverso, configure apenas o IP (ou CIDR restrito) desse proxy como confiável:
+
+```yaml
+    environment:
+      - PORTAL_TRUSTED_PROXIES=172.20.0.10
+```
+
+Separe vários proxies com vírgulas. Não use todas as redes privadas (`10.0.0.0/8`, `172.16.0.0/12` ou `192.168.0.0/16`): prefira o IP fixo do Nginx Proxy Manager, Traefik ou Cloudflare Tunnel. O proxy deve sobrescrever ou anexar corretamente `X-Forwarded-For` e `X-Forwarded-Proto`. Em acesso direto, deixe a variável ausente.
+
   
 
 ⚙️ Customização

@@ -88,6 +88,15 @@ services:
 
 ```
 
+Si el portal está detrás de un proxy inverso, confía únicamente en la IP (o un CIDR restringido) de ese proxy:
+
+```yaml
+    environment:
+      - PORTAL_TRUSTED_PROXIES=172.20.0.10
+```
+
+Separa varios proxies con comas. No confíes en rangos privados completos; utiliza preferentemente la IP fija de Nginx Proxy Manager, Traefik o Cloudflare Tunnel. El proxy debe sobrescribir o añadir correctamente `X-Forwarded-For` y `X-Forwarded-Proto`. Para acceso directo, deja esta variable sin definir.
+
 ⚙️ Personalización
 Toda la configuración se realiza directamente a través de la interfaz del panel de administración (o manipulando directamente la base de datos SQLite si prefieres la línea de comandos).
 

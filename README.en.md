@@ -82,6 +82,15 @@ services:
     restart: unless-stopped
 ```
 
+If the portal is behind a reverse proxy, trust only that proxy's IP (or a narrow CIDR):
+
+```yaml
+    environment:
+      - PORTAL_TRUSTED_PROXIES=172.20.0.10
+```
+
+Separate multiple proxies with commas. Do not trust entire private ranges; prefer the fixed IP of Nginx Proxy Manager, Traefik, or Cloudflare Tunnel. The proxy must overwrite or correctly append `X-Forwarded-For` and `X-Forwarded-Proto`. Leave this variable unset for direct access.
+
 ⚙️ Customization
 All configuration is done directly through the admin panel interface (or by directly manipulating the SQLite database if you prefer the command line).
 
