@@ -217,73 +217,77 @@ $currentLang = $settings['language'] ?? 'pt';
                 <?php if ($editUserMode): ?><a href="admin.php#user-panel" class="btn">Cancelar</a><?php endif; ?>
             </form>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nome de Usuário</th>
-                        <th style="width: 150px; text-align: right;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($usersList as $usr): ?>
-                        <tr style="<?= ($editUserMode && $editUser['id'] == $usr['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
-                            <td style="font-weight:bold"><?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td>
-                                <div class="action-buttons" style="justify-content: flex-end;">
-                                    <a href="admin.php?edit_user=<?= $usr['id'] ?>#user-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem">Editar</a>
-                                    <?php if (count($usersList) > 1): ?>
-                                        <form method="POST" style="margin:0;">
-                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-                                            <input type="hidden" name="action" value="delete_user">
-                                            <input type="hidden" name="user_id" value="<?= $usr['id'] ?>">
-                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('Excluir usuário <?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?>?');">Excluir</button>
-                                        </form>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome de Usuário</th>
+                            <th style="width: 150px; text-align: right;">Ações</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usersList as $usr): ?>
+                            <tr style="<?= ($editUserMode && $editUser['id'] == $usr['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                                <td style="font-weight:bold"><?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td>
+                                    <div class="action-buttons" style="justify-content: flex-end;">
+                                        <a href="admin.php?edit_user=<?= $usr['id'] ?>#user-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem">Editar</a>
+                                        <?php if (count($usersList) > 1): ?>
+                                            <form method="POST" style="margin:0;">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="action" value="delete_user">
+                                                <input type="hidden" name="user_id" value="<?= $usr['id'] ?>">
+                                                <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('Excluir usuário <?= htmlspecialchars($usr['username'], ENT_QUOTES, 'UTF-8') ?>?');">Excluir</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- PAINEL DE SERVIÇOS -->
         <div class="admin-panel">
             <h2><?= t('Serviços Cadastrados') ?></h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th><?= t('Ícone') ?></th>
-                        <th><?= t('Nome do Serviço') ?></th>
-                        <th><?= t('Categoria / Aba') ?></th>
-                        <th><?= t('Ações') ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($tools as $tool): ?>
-                        <tr style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
-                            <td>
-                                <?php $resIco = resolveIconUrl($tool['icon_url']); if(!empty($resIco)): ?>
-                                    <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
-                                <?php endif; ?>
-                            </td>
-                            <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($tool['cat_name'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td>
-                                <div class="action-buttons">
-                                    <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
-                                    <form method="POST" style="margin:0;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="action" value="delete_tool">
-                                        <input type="hidden" name="tool_id" value="<?= $tool['id'] ?>">
-                                        <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm(<?= htmlspecialchars(json_encode(t('delete') . ' \'' . $tool['name'] . '\'?'), ENT_QUOTES, 'UTF-8') ?>);"><?= t('delete') ?></button>
-                                    </form>
-                                </div>
-                            </td>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><?= t('Ícone') ?></th>
+                            <th><?= t('Nome do Serviço') ?></th>
+                            <th><?= t('Categoria / Aba') ?></th>
+                            <th><?= t('Ações') ?></th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($tools as $tool): ?>
+                            <tr style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                                <td>
+                                    <?php $resIco = resolveIconUrl($tool['icon_url']); if(!empty($resIco)): ?>
+                                        <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
+                                    <?php endif; ?>
+                                </td>
+                                <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td><?= htmlspecialchars($tool['cat_name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                            <input type="hidden" name="action" value="delete_tool">
+                                            <input type="hidden" name="tool_id" value="<?= $tool['id'] ?>">
+                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm(<?= htmlspecialchars(json_encode(t('delete') . ' \'' . $tool['name'] . '\'?'), ENT_QUOTES, 'UTF-8') ?>);"><?= t('delete') ?></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

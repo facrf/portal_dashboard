@@ -200,8 +200,13 @@ foreach ($toolsList as $tool) {
     <div class="container">
         <header>
             <h1><?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></h1>
+            
+            <div class="search-container">
+                <input type="text" id="searchInput" class="search-input" placeholder="<?= htmlspecialchars(t('search'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+                <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </div>
+
             <div class="header-controls">
-                
                 <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Toggle Theme">
                     <svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm9-4h-2c-.55 0-1 .45-1 1s.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1zM4 12c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zm7-9V1c0-.55-.45-1-1-1s-1 .45-1 1v2c0 .55.45 1 1 1s1-.45 1-1zm0 18v2c0 .55-.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zm7.66-13.88l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zM4.93 19.07l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zm14.14 0c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.41-1.41c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.41zM6.34 6.34c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L6.34 3.51c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.42z"/></svg>
                     <div class="toggle-slot"><div class="toggle-button"></div></div>
@@ -211,11 +216,11 @@ foreach ($toolsList as $tool) {
                 <div class="header-nav">
                     <a href="admin.php" class="btn"><?= t('settings') ?></a>
                     <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
-                   <form method="POST" action="login.php" style="display: inline; margin: 0;">
-        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-        <input type="hidden" name="action" value="logout">
-        <button type="submit" class="btn btn-danger" style="margin-left: 10px;"><?= t('logout') ?></button>
-    </form>
+                    <form method="POST" action="login.php" style="display: inline; margin: 0;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="action" value="logout">
+                        <button type="submit" class="btn btn-danger"><?= t('logout') ?></button>
+                    </form>
                 </div>
             </div>
         </header>
@@ -229,22 +234,22 @@ foreach ($toolsList as $tool) {
                     <div class="category-items">
                         
                         <?php foreach ($groupedTools[$cat['id']] as $tool): 
-                            
-                            // 1. Sanitização contra URI javascript: e data: (Evita XSS)
                             $safeUrl = $tool['url'];
                             if (preg_match('/^\s*(javascript|vbscript|data):/i', $safeUrl)) {
                                 $safeUrl = '#blocked';
                             }
                             $safeUrl = htmlspecialchars($safeUrl, ENT_QUOTES, 'UTF-8');
+                            $toolNameLower = htmlspecialchars(mb_strtolower($tool['name']), ENT_QUOTES, 'UTF-8');
+                            $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
                         ?>
-                            <!-- 2. Adiciona rel="noopener noreferrer" para evitar Tabnabbing e Tracking -->
-                            <a href="<?= $safeUrl ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-url="<?= $safeUrl ?>">
-                                
+                            <a href="<?= $safeUrl ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
                                     <?php $iconPath = resolveIconUrl($tool['icon_url']); if (!empty($iconPath)): ?>
-                                        <img src="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                        <div class="card-icon-wrapper">
+                                            <img src="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy">
+                                        </div>
                                     <?php endif; ?>
                                     
                                     <div class="card-content">
@@ -294,7 +299,34 @@ foreach ($toolsList as $tool) {
                 });
             }
 
-            // 2. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
+            // 2. Filtro de Busca Instantânea
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase().trim();
+                    const categoryColumns = document.querySelectorAll('.category-column');
+                    
+                    categoryColumns.forEach(column => {
+                        let hasVisibleCards = false;
+                        const toolCards = column.querySelectorAll('.tool-card');
+                        
+                        toolCards.forEach(card => {
+                            const name = card.getAttribute('data-name') || '';
+                            const desc = card.getAttribute('data-desc') || '';
+                            if (name.includes(query) || desc.includes(query)) {
+                                card.style.display = 'flex';
+                                hasVisibleCards = true;
+                            } else {
+                                card.style.display = 'none';
+                            }
+                        });
+                        
+                        column.style.display = hasVisibleCards ? 'block' : 'none';
+                    });
+                });
+            }
+
+            // 3. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
             const cards = document.querySelectorAll('.tool-card');
             const txtRunning = '<?= htmlspecialchars(t('status_running'), ENT_QUOTES, 'UTF-8') ?>';
             const txtError = '<?= htmlspecialchars(t('status_error'), ENT_QUOTES, 'UTF-8') ?>';

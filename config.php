@@ -391,27 +391,29 @@ $currentLang = $settings['language'] ?? 'pt';
                 <?php if ($editCatMode): ?><a href="config.php" class="btn"><?= t('Cancelar') ?></a><?php endif; ?>
             </form>
 
-            <table>
-                <thead><tr><th><?= t('Nome da Categoria') ?></th><th><?= t('Ações') ?></th></tr></thead>
-                <tbody>
-                    <?php foreach ($categories as $cat): ?>
-                        <tr style="<?= ($editCatMode && $editCat['id'] == $cat['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
-                            <td style="font-weight: bold;"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td>
-                                <div class="action-buttons">
-                                    <a href="config.php?edit_cat=<?= $cat['id'] ?>#cat-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
-                                    <form method="POST" style="margin:0;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="action" value="delete_category">
-                                        <input type="hidden" name="cat_id" value="<?= $cat['id'] ?>">
-                                        <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('Excluir aba? Serviços serão movidos para outra.') ?>');"><?= t('delete') ?></button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th><?= t('Nome da Categoria') ?></th><th><?= t('Ações') ?></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($categories as $cat): ?>
+                            <tr style="<?= ($editCatMode && $editCat['id'] == $cat['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                                <td style="font-weight: bold;"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="config.php?edit_cat=<?= $cat['id'] ?>#cat-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                                            <input type="hidden" name="action" value="delete_category">
+                                            <input type="hidden" name="cat_id" value="<?= $cat['id'] ?>">
+                                            <button type="submit" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem" onclick="return confirm('<?= t('Excluir aba? Serviços serão movidos para outra.') ?>');"><?= t('delete') ?></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

@@ -14,5 +14,6 @@ return [
     'save_notes' => 'Guardar Apuntes',
     'status_running' => 'EN LÍNEA',
     'status_error' => 'ERROR',
-    'logout' => 'Cerrar sesión'
+    'logout' => 'Cerrar sesión',
+    'search' => 'Buscar servicio...'
 ];

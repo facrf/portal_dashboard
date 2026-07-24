@@ -14,5 +14,6 @@ return [
     'save_notes' => 'Salvar Anotações',
     'status_running' => 'RODANDO',
     'status_error' => 'ERRO',
-    'logout' => 'Sair'
+    'logout' => 'Sair',
+    'search' => 'Buscar serviço...'
 ];

@@ -14,5 +14,6 @@ return [
     'save_notes' => 'Save Notes',
     'status_running' => 'RUNNING',
     'status_error' => 'ERROR',
-    'logout' => 'Logout'
+    'logout' => 'Logout',
+    'search' => 'Search services...'
 ];
