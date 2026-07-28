@@ -39,6 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             die("Ação bloqueada: O nome de usuário contém caracteres inválidos (evite espaços ou símbolos especiais).");
         }
 
+        if (!empty($_POST['password']) && strlen($_POST['password']) > 72) {
+            die("Ação bloqueada: A senha não pode ter mais que 72 caracteres.");
+        }
+
         if ($action === 'add_user') {
             $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
             $stmt->execute([$username, password_hash($_POST['password'], PASSWORD_BCRYPT)]);

@@ -84,6 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = "Preencha todos os campos.";
             } elseif (!preg_match('/^[a-zA-Z0-9_.-]+$/', $username)) {
                 $error = "O usuário deve conter apenas letras, números, traços e underscores.";
+            } elseif (strlen($password) > 72) {
+                $error = "A senha não pode ter mais que 72 caracteres.";
             } else {
                 $hash = password_hash($password, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
@@ -100,6 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
             $stmt->execute([$username]);
             $user = $stmt->fetch();
+
+            if (strlen($password) > 72) {
+                $user = false; // Bloqueia senhas gigantes para evitar DoS no password_verify
+            }
 
             if ($user && password_verify($password, $user['password'])) {
                 
