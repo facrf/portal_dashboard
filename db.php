@@ -1,4 +1,11 @@
 <?php
+/**
+ * Portal Dashboard
+ *
+ * @author    FACRF
+ * @copyright 2026 FACRF
+ * @link      https://github.com/facrf/portal_dashboard
+ */
 // db.php
 
 $dbDir = dirname(__DIR__) . '/db_data';
