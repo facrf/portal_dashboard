@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $allowedLangs = ['pt', 'es', 'en'];
                                 $importLang = (isset($s['language']) && in_array($s['language'], $allowedLangs)) ? $s['language'] : 'pt';
 
-                                $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, footer_text=? WHERE id=1");
+                                $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, footer_text=?, session_days=?, brute_max_attempts=?, brute_lockout_time=?, show_clock=?, show_greeting=?, greeting_name=? WHERE id=1");
                                 $stmt->execute([
                                     $s['portal_name'] ?? 'Meu Portal', 
                                     $s['favicon'] ?? '', 
@@ -104,7 +104,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $s['bg_image'] ?? '', 
                                     $s['text_color'] ?? '#ffffff', 
                                     $importLang, 
-                                    $footer
+                                    $footer,
+                                    max(1, min(365, (int)($s['session_days'] ?? 7))),
+                                    max(1, min(50, (int)($s['brute_max_attempts'] ?? 5))),
+                                    max(1, min(86400, (int)($s['brute_lockout_time'] ?? 900))),
+                                    isset($s['show_clock']) ? (int)$s['show_clock'] : 1,
+                                    isset($s['show_greeting']) ? (int)$s['show_greeting'] : 1,
+                                    $s['greeting_name'] ?? 'Administrador'
                                 ]);
                             }
 
@@ -200,9 +206,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $allowedLangs = ['pt', 'es', 'en'];
         $lang = in_array($_POST['language'], $allowedLangs) ? $_POST['language'] : 'pt';
+        $showClock = isset($_POST['show_clock']) ? 1 : 0;
+        $showGreeting = isset($_POST['show_greeting']) ? 1 : 0;
+        $greetingName = trim($_POST['greeting_name']) ?: 'Administrador';
 
-        $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=? WHERE id=1");
-        $stmt->execute([$_POST['portal_name'], $_POST['favicon'], $_POST['bg_color'], $_POST['bg_image'], $_POST['text_color'], $lang]);
+        $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, show_clock=?, show_greeting=?, greeting_name=? WHERE id=1");
+        $stmt->execute([$_POST['portal_name'], $_POST['favicon'], $_POST['bg_color'], $_POST['bg_image'], $_POST['text_color'], $lang, $showClock, $showGreeting, $greetingName]);
+        
+        header("Location: config.php?success=1"); exit;
+    }
+    
+    // Salvar Configurações de Segurança e Acesso
+    if (isset($_POST['action']) && $_POST['action'] === 'update_security') {
+        $sessionDays = (int) $_POST['session_days'];
+        $maxAttempts = (int) $_POST['brute_max_attempts'];
+        $lockoutTime = (int) $_POST['brute_lockout_time'];
+        
+        $sessionDays = max(1, min(365, $sessionDays));
+        $maxAttempts = max(1, min(50, $maxAttempts));
+        $lockoutTime = max(1, min(86400, $lockoutTime));
+
+        $stmt = $pdo->prepare("UPDATE settings SET session_days=?, brute_max_attempts=?, brute_lockout_time=? WHERE id=1");
+        $stmt->execute([$sessionDays, $maxAttempts, $lockoutTime]);
         
         header("Location: config.php?success=1"); exit;
     }
@@ -234,6 +259,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: config.php"); 
         exit;
     }
+    
+    // AJAX Reorder Categories
+    if (isset($_POST['action']) && $_POST['action'] === 'reorder_categories' && isset($_POST['orders'])) {
+        $orders = json_decode($_POST['orders'], true);
+        if (is_array($orders)) {
+            $pdo->beginTransaction();
+            foreach ($orders as $order) {
+                $stmt = $pdo->prepare("UPDATE categories SET sort_order = ? WHERE id = ?");
+                $stmt->execute([$order['order'], $order['id']]);
+            }
+            $pdo->commit();
+            echo json_encode(['status' => 'ok']);
+        }
+        exit;
+    }
 }
 
 $editCatMode = false; $editCat = null;
@@ -242,7 +282,7 @@ if (isset($_GET['edit_cat'])) {
 }
 
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+$categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")->fetchAll();
 
 $bgColorValue = !empty($settings['bg_color']) ? htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') : '#000000';
 $textColorValue = !empty($settings['text_color']) ? htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') : '#ffffff';
@@ -251,6 +291,7 @@ $currentLang = $settings['language'] ?? 'pt';
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
+    <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
     <title><?= t('appearance_tabs') ?></title>
     
@@ -341,6 +382,49 @@ $currentLang = $settings['language'] ?? 'pt';
                     <input type="text" name="bg_image" value="<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>">
                 </div>
                 
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 15px;">
+                    <input type="checkbox" name="show_clock" id="show_clock" value="1" <?= (!isset($settings['show_clock']) || $settings['show_clock'] == 1) ? 'checked' : '' ?> style="width: 20px; height: 20px; cursor: pointer;">
+                    <label for="show_clock" style="margin: 0; cursor: pointer;"><?= t('Mostrar Relógio na Página Inicial') ?></label>
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 15px;">
+                    <input type="checkbox" name="show_greeting" id="show_greeting" value="1" <?= (!isset($settings['show_greeting']) || $settings['show_greeting'] == 1) ? 'checked' : '' ?> style="width: 20px; height: 20px; cursor: pointer;">
+                    <label for="show_greeting" style="margin: 0; cursor: pointer;"><?= t('Mostrar Saudação') ?></label>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label><?= t('Nome para a Saudação') ?>:</label>
+                    <input type="text" name="greeting_name" value="<?= htmlspecialchars($settings['greeting_name'] ?? 'Administrador', ENT_QUOTES, 'UTF-8') ?>">
+                </div>
+                
+                <button type="submit" class="btn"><?= t('save_changes') ?></button>
+            </form>
+        </div>
+
+        <div class="admin-panel" id="security-panel">
+            <h2><?= t('Segurança e Acesso') ?></h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="action" value="update_security">
+                
+                <div class="form-group">
+                    <label><?= t('Dias de validade da sessão') ?>:</label>
+                    <input type="number" name="session_days" value="<?= (int)($settings['session_days'] ?? 7) ?>" min="1" max="365" required>
+                    <small style="opacity: 0.7; font-size: 0.85em; display: block; margin-top: 5px;"><?= t('Tempo que um usuário permanece logado sem precisar digitar a senha novamente.') ?></small>
+                </div>
+                
+                <div class="form-group">
+                    <label><?= t('Tentativas de login (Anti-Brute Force)') ?>:</label>
+                    <input type="number" name="brute_max_attempts" value="<?= (int)($settings['brute_max_attempts'] ?? 5) ?>" min="1" max="50" required>
+                    <small style="opacity: 0.7; font-size: 0.85em; display: block; margin-top: 5px;"><?= t('Número máximo de tentativas de login incorretas antes de bloquear o IP.') ?></small>
+                </div>
+                
+                <div class="form-group">
+                    <label><?= t('Tempo de bloqueio do IP (em segundos)') ?>:</label>
+                    <input type="number" name="brute_lockout_time" value="<?= (int)($settings['brute_lockout_time'] ?? 900) ?>" min="1" max="86400" required>
+                    <small style="opacity: 0.7; font-size: 0.85em; display: block; margin-top: 5px;"><?= t('Tempo pelo qual o IP do atacante ficará bloqueado (Ex: 900 = 15 minutos).') ?></small>
+                </div>
+                
                 <button type="submit" class="btn"><?= t('save_changes') ?></button>
             </form>
         </div>
@@ -401,9 +485,9 @@ $currentLang = $settings['language'] ?? 'pt';
             <div class="table-responsive">
                 <table>
                     <thead><tr><th><?= t('Nome da Categoria') ?></th><th><?= t('Ações') ?></th></tr></thead>
-                    <tbody>
+                    <tbody id="categories-tbody">
                         <?php foreach ($categories as $cat): ?>
-                            <tr style="<?= ($editCatMode && $editCat['id'] == $cat['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                            <tr draggable="true" data-id="<?= $cat['id'] ?>" class="draggable-row" style="<?= ($editCatMode && $editCat['id'] == $cat['id']) ? 'background: rgba(255,255,255,0.05);' : 'cursor: grab;' ?>">
                                 <td style="font-weight: bold;"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td>
                                     <div class="action-buttons">
@@ -424,6 +508,11 @@ $currentLang = $settings['language'] ?? 'pt';
         </div>
     </div>
 
+    <style>
+        .draggable-row.drag-over { border-top: 2px solid #007bff; background: rgba(0, 123, 255, 0.1) !important; }
+        .draggable-row.dragging { opacity: 0.5; }
+    </style>
+
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll('form').forEach(form => {
@@ -434,6 +523,60 @@ $currentLang = $settings['language'] ?? 'pt';
                     }
                 });
             });
+            
+            let draggedRow = null;
+            const tbody = document.getElementById('categories-tbody');
+            
+            if (tbody) {
+                tbody.querySelectorAll('tr.draggable-row').forEach(row => {
+                    row.addEventListener('dragstart', function(e) {
+                        draggedRow = this;
+                        setTimeout(() => this.classList.add('dragging'), 0);
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    
+                    row.addEventListener('dragend', function() {
+                        this.classList.remove('dragging');
+                        draggedRow = null;
+                    });
+                    
+                    row.addEventListener('dragover', function(e) {
+                        e.preventDefault();
+                        if (draggedRow !== this) this.classList.add('drag-over');
+                    });
+                    
+                    row.addEventListener('dragleave', function() {
+                        this.classList.remove('drag-over');
+                    });
+                    
+                    row.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        this.classList.remove('drag-over');
+                        if (draggedRow && draggedRow !== this) {
+                            tbody.insertBefore(draggedRow, this.nextSibling || this);
+                            saveCategoryOrder();
+                        }
+                    });
+                });
+            }
+
+            function saveCategoryOrder() {
+                const rows = tbody.querySelectorAll('tr.draggable-row');
+                const orders = [];
+                rows.forEach((row, index) => {
+                    orders.push({ id: row.getAttribute('data-id'), order: index });
+                });
+                
+                const formData = new FormData();
+                formData.append('csrf_token', '<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>');
+                formData.append('action', 'reorder_categories');
+                formData.append('orders', JSON.stringify(orders));
+                
+                fetch('config.php', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
         });
     </script>
 </body>

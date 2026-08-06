@@ -107,12 +107,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
 
     // PROTEÇÃO CONTRA SSRF: Lista Branca baseada no banco de dados
     $isAllowed = false;
+    $pingParams = [];
     
     if (!empty($_GET['url'])) {
         // Só permite se a exata URL existir nos cadastros
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url = ?");
         $stmt->execute([$_GET['url']]);
-        $isAllowed = $stmt->fetchColumn() > 0;
+        if ($stmt->fetchColumn() > 0) {
+            $isAllowed = true;
+            $pingParams['url'] = $_GET['url'];
+        }
     } elseif (!empty($_GET['host']) && isset($_GET['port'])) {
         // Compara host e porta analisados, evitando correspondência parcial via LIKE.
         $requestedHost = strtolower(rtrim(trim($_GET['host']), '.'));
@@ -122,6 +126,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
             $registeredPort = parse_url($registeredUrl, PHP_URL_PORT);
             if ($registeredHost === $requestedHost && (int) $registeredPort === $requestedPort) {
                 $isAllowed = true;
+                $pingParams['host'] = $requestedHost;
+                $pingParams['port'] = $requestedPort;
                 break;
             }
         }
@@ -133,7 +139,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
         exit;
     }
 
-    $isOnline = Pinger::check($_GET);
+    $isOnline = Pinger::check($pingParams);
     echo json_encode(['status' => $isOnline ? 'ok' : 'error']);
     exit;
 }
@@ -143,31 +149,41 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
 // ==========================================
 
 // Salva o texto do bloco de notas do rodapé - PROTEGIDO CONTRA CSRF
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_footer') {
-    
-    // Validação de segurança Anti-CSRF
-    if (empty($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        die("Requisição inválida.");
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die("Invalid CSRF token");
     }
 
-    $stmt = $pdo->prepare("UPDATE settings SET footer_text = ? WHERE id = 1");
-    $stmt->execute([$_POST['footer_text']]);
-    header("Location: index.php");
-    exit;
-}
+    if (isset($_POST['action']) && $_POST['action'] === 'logout') {
+        session_destroy();
+        header("Location: login.php");
+        exit;
+    }
 
+    if (isset($_POST['action']) && $_POST['action'] === 'update_footer') {
+        $stmt = $pdo->prepare("UPDATE settings SET footer_text=? WHERE id=1");
+        $stmt->execute([$_POST['footer_text']]);
+        header("Location: index.php");
+        exit;
+    }
+}
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 
 // Força ENT_QUOTES para barrar injeção de aspas simples no CSS
 $bgImageStyle = !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') . "')" : 'none';
 $currentLang = $settings['language'] ?? 'pt';
 
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
-$toolsList = $pdo->query("SELECT * FROM tools ORDER BY name ASC")->fetchAll();
+$categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$categoriesMap = [];
+foreach ($categories as $c) {
+    $categoriesMap[$c['id']] = $c['name'];
+}
+
+$tools = $pdo->query("SELECT * FROM tools ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $groupedTools = [];
 foreach ($categories as $cat) { $groupedTools[$cat['id']] = []; }
-foreach ($toolsList as $tool) {
+foreach ($tools as $tool) {
     $cid = $tool['category_id'];
     if (isset($groupedTools[$cid])) { $groupedTools[$cid][] = $tool; }
 }
@@ -175,6 +191,7 @@ foreach ($toolsList as $tool) {
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
+    <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
@@ -184,7 +201,7 @@ foreach ($toolsList as $tool) {
     <title><?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>
     
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
-        <link rel="icon" href="<?= htmlspecialchars($favicon, ENT_QUOTES, 'UTF-8') ?>">
+        <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
     
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
@@ -232,6 +249,48 @@ foreach ($toolsList as $tool) {
             </div>
         </header>
 
+        <?php 
+        $showClock = !isset($settings['show_clock']) || $settings['show_clock'] == 1;
+        $showGreeting = !isset($settings['show_greeting']) || $settings['show_greeting'] == 1;
+        if ($showClock || $showGreeting): 
+        ?>
+        <div class="clock-widget" style="text-align: center; margin: 2rem 0; color: var(--text-color);">
+            <?php if ($showClock): ?>
+            <div id="clock-time" style="font-size: 3.5rem; font-weight: bold; letter-spacing: 2px; text-shadow: 0 4px 15px rgba(0,0,0,0.2);">--:--</div>
+            <div id="clock-date" style="font-size: 1.1rem; opacity: 0.8; margin-top: 5px;"></div>
+            <?php endif; ?>
+            
+            <?php if ($showGreeting): ?>
+            <div id="clock-greeting" style="font-size: 1.2rem; margin-top: 10px; font-weight: 500; opacity: 0.9;"></div>
+            <?php endif; ?>
+        </div>
+        <script>
+            function updateClock() {
+                const now = new Date();
+                
+                <?php if ($showClock): ?>
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('clock-time').textContent = `${hours}:${minutes}`;
+                
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                document.getElementById('clock-date').textContent = now.toLocaleDateString('<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>', options);
+                <?php endif; ?>
+                
+                <?php if ($showGreeting): ?>
+                let greeting = '<?= htmlspecialchars(t('dashboard'), ENT_QUOTES, 'UTF-8') ?>';
+                if (now.getHours() >= 5 && now.getHours() < 12) greeting = 'Bom dia';
+                else if (now.getHours() >= 12 && now.getHours() < 18) greeting = 'Boa tarde';
+                else greeting = 'Boa noite';
+                
+                document.getElementById('clock-greeting').textContent = greeting + ', <?= htmlspecialchars($settings['greeting_name'] ?? 'Administrador', ENT_QUOTES, 'UTF-8') ?>.';
+                <?php endif; ?>
+            }
+            setInterval(updateClock, 1000);
+            updateClock();
+        </script>
+        <?php endif; ?>
+
         <div class="dashboard-grid">
             <?php foreach ($categories as $cat): 
                 if (empty($groupedTools[$cat['id']])) continue; 
@@ -250,12 +309,17 @@ foreach ($toolsList as $tool) {
                             $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
                         ?>
                             <a href="<?= $safeUrl ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
+                                <?php if (!empty($tool['tag_name'])): ?>
+                                    <span class="tool-tag" style="background-color: <?= htmlspecialchars($tool['tag_color'], ENT_QUOTES, 'UTF-8') ?>;">
+                                        <?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                <?php endif; ?>
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
                                     <?php $iconPath = resolveIconUrl($tool['icon_url']); if (!empty($iconPath)): ?>
                                         <div class="card-icon-wrapper">
-                                            <img src="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy">
+                                            <img src="<?= $iconPath ?>" alt="" loading="lazy">
                                         </div>
                                     <?php endif; ?>
                                     
@@ -330,6 +394,23 @@ foreach ($toolsList as $tool) {
                         
                         column.style.display = hasVisibleCards ? 'block' : 'none';
                     });
+                });
+                
+                // Busca Global (DuckDuckGo) ao pressionar Enter se não houver cards visíveis
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        const term = e.target.value.trim();
+                        if (!term) return;
+                        
+                        let hasVisible = false;
+                        document.querySelectorAll('.tool-card').forEach(card => {
+                            if (card.style.display !== 'none') hasVisible = true;
+                        });
+                        
+                        if (!hasVisible) {
+                            window.open(`https://duckduckgo.com/?q=${encodeURIComponent(term)}`, '_blank');
+                        }
+                    }
                 });
             }
 

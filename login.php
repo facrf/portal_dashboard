@@ -30,12 +30,14 @@ $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $isFirstAccess = ($userCount == 0);
 $error = '';
 
+$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
+
 // ==========================================
 // SISTEMA ANTI BRUTE-FORCE (RATE LIMITING)
 // ==========================================
 $ip = getClientIp();
-$maxAttempts = 5;
-$lockoutTime = 900; // 15 minutos em segundos
+$maxAttempts = (int)($settings['brute_max_attempts'] ?? 5);
+$lockoutTime = (int)($settings['brute_lockout_time'] ?? 900);
 
 $stmt = $pdo->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip = ?");
 $stmt->execute([$ip]);
@@ -141,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $currentLang = $settings['language'] ?? 'pt';
 ?>
 
@@ -149,6 +150,7 @@ $currentLang = $settings['language'] ?? 'pt';
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
+    <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $isFirstAccess ? 'Primeiro Acesso' : 'Login' ?> - <?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>

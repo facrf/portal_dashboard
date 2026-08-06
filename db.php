@@ -48,7 +48,18 @@ addColumnIfNotExists($pdo, 'settings', 'favicon', "TEXT DEFAULT ''");
 addColumnIfNotExists($pdo, 'settings', 'footer_text', "TEXT DEFAULT ''"); 
 addColumnIfNotExists($pdo, 'settings', 'language', "TEXT DEFAULT 'pt'");
 addColumnIfNotExists($pdo, 'settings', 'session_days', "INTEGER DEFAULT 7"); // Padrão: 7 dias
+addColumnIfNotExists($pdo, 'settings', 'brute_max_attempts', "INTEGER DEFAULT 5"); 
+addColumnIfNotExists($pdo, 'settings', 'brute_lockout_time', "INTEGER DEFAULT 900"); // 15 minutos em segundos
+addColumnIfNotExists($pdo, 'settings', 'show_clock', "INTEGER DEFAULT 1"); 
+addColumnIfNotExists($pdo, 'settings', 'show_greeting', "INTEGER DEFAULT 1");
+addColumnIfNotExists($pdo, 'settings', 'greeting_name', "TEXT DEFAULT 'Administrador'");
+
 addColumnIfNotExists($pdo, 'tools', 'category_id', "INTEGER DEFAULT 1");
+addColumnIfNotExists($pdo, 'tools', 'sort_order', "INTEGER DEFAULT 0");
+addColumnIfNotExists($pdo, 'tools', 'tag_name', "TEXT DEFAULT ''");
+addColumnIfNotExists($pdo, 'tools', 'tag_color', "TEXT DEFAULT '#007bff'");
+
+addColumnIfNotExists($pdo, 'categories', 'sort_order', "INTEGER DEFAULT 0");
 
 if ($pdo->query("SELECT COUNT(*) FROM settings")->fetchColumn() == 0) {
     $pdo->exec("INSERT INTO settings (bg_color, bg_image, text_color, portal_name) VALUES ('#1e1e2e', '', '#cdd6f4', 'Meu Portal')");

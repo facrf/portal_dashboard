@@ -23,18 +23,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // CRUD - SERVIÇOS
     if ($action === 'add_tool') {
-        $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id']]);
+        $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id, tag_name, tag_color) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id'], $_POST['tag_name'] ?? '', $_POST['tag_color'] ?? '#007bff']);
         header("Location: admin.php"); exit;
     }
     elseif ($action === 'edit_tool') {
-        $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=? WHERE id=?");
-        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id'], $_POST['tool_id']]);
+        $stmt = $pdo->prepare("UPDATE tools SET name = ?, url = ?, icon_url = ?, description = ?, category_id = ?, tag_name = ?, tag_color = ? WHERE id = ?");
+        $stmt->execute([$_POST['name'], $_POST['url'], $_POST['icon_url'], $_POST['description'], $_POST['category_id'], $_POST['tag_name'] ?? '', $_POST['tag_color'] ?? '#007bff', $_POST['tool_id']]);
         header("Location: admin.php"); exit;
     }
     elseif ($action === 'delete_tool') {
-        $pdo->prepare("DELETE FROM tools WHERE id=?")->execute([$_POST['tool_id']]);
+        $stmt = $pdo->prepare("DELETE FROM tools WHERE id = ?");
+        $stmt->execute([$_POST['tool_id']]);
         header("Location: admin.php"); exit;
+    }
+    
+    // AJAX Reorder Tools
+    if ($action === 'reorder_tools' && isset($_POST['orders'])) {
+        $orders = json_decode($_POST['orders'], true);
+        if (is_array($orders)) {
+            $pdo->beginTransaction();
+            foreach ($orders as $order) {
+                $stmt = $pdo->prepare("UPDATE tools SET sort_order = ? WHERE id = ?");
+                $stmt->execute([$order['order'], $order['id']]);
+            }
+            $pdo->commit();
+            echo json_encode(['status' => 'ok']);
+        }
+        exit;
     }
 
     // CRUD - USUÁRIOS
@@ -103,8 +119,8 @@ if (isset($_GET['edit_user'])) {
 }
 
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
-$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
-$tools = $pdo->query("SELECT t.*, c.name as cat_name FROM tools t LEFT JOIN categories c ON t.category_id = c.id ORDER BY t.name ASC")->fetchAll();
+$categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")->fetchAll();
+$tools = $pdo->query("SELECT t.*, c.name as cat_name FROM tools t LEFT JOIN categories c ON t.category_id = c.id ORDER BY t.category_id ASC, t.sort_order ASC, t.name ASC")->fetchAll();
 $usersList = $pdo->query("SELECT id, username FROM users ORDER BY username ASC")->fetchAll();
 
 $currentLang = $settings['language'] ?? 'pt';
@@ -112,6 +128,7 @@ $currentLang = $settings['language'] ?? 'pt';
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
+    <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
     <title><?= t('manage_services') ?></title>
     <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
@@ -189,7 +206,18 @@ $currentLang = $settings['language'] ?? 'pt';
                 </div>
                 
                 <div>
-                    <button type="submit" class="btn"><?= $editMode ? t('save_changes') : t('add_service') ?></button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 1rem;">
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label>Tag (<?= t('Opcional') ?>):</label>
+                        <input type="text" name="tag_name" value="<?= $editMode ? htmlspecialchars($editTool['tag_name'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?>" placeholder="EX: PROD">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label><?= t('Cor da Tag') ?>:</label>
+                        <input type="color" name="tag_color" value="<?= $editMode ? htmlspecialchars($editTool['tag_color'] ?? '#007bff', ENT_QUOTES, 'UTF-8') : '#007bff' ?>">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn"><?= $editMode ? t('save_changes') : t('Adicionar') ?></button>
                     <?php if ($editMode): ?><a href="admin.php" class="btn"><?= t('Cancelar') ?></a><?php endif; ?>
                 </div>
             </form>
@@ -263,26 +291,33 @@ $currentLang = $settings['language'] ?? 'pt';
         <!-- PAINEL DE SERVIÇOS -->
         <div class="admin-panel">
             <h2><?= t('Serviços Cadastrados') ?></h2>
+            <div style="margin-bottom: 10px; font-size: 0.85rem; opacity: 0.8;"><?= t('Arraste as linhas para reordenar os serviços dentro das categorias.') ?></div>
             <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
                             <th><?= t('Ícone') ?></th>
                             <th><?= t('Nome do Serviço') ?></th>
-                            <th><?= t('Categoria / Aba') ?></th>
+                            <th><?= t('Categoria') ?></th>
                             <th><?= t('Ações') ?></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tools-tbody">
                         <?php foreach ($tools as $tool): ?>
-                            <tr style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : '' ?>">
+                            <tr draggable="true" data-id="<?= $tool['id'] ?>" class="draggable-row" style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : 'cursor: grab;' ?>">
                                 <td>
                                     <?php $resIco = resolveIconUrl($tool['icon_url']); if(!empty($resIco)): ?>
                                         <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
                                     <?php endif; ?>
                                 </td>
-                                <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                                <td><?= htmlspecialchars($tool['cat_name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    <?php if (!empty($tool['tag_name'])): ?>
+                                        <span style="background-color: <?= htmlspecialchars($tool['tag_color'], ENT_QUOTES, 'UTF-8') ?>; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 8px;">
+                                            <?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="font-size: 0.85rem; opacity: 0.8;"><?= htmlspecialchars($tool['cat_name'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td>
                                     <div class="action-buttons">
                                         <a href="admin.php?edit=<?= $tool['id'] ?>#form-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
@@ -302,6 +337,11 @@ $currentLang = $settings['language'] ?? 'pt';
         </div>
     </div>
 
+    <style>
+        .draggable-row.drag-over { border-top: 2px solid #007bff; background: rgba(0, 123, 255, 0.1) !important; }
+        .draggable-row.dragging { opacity: 0.5; }
+    </style>
+    
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll('form').forEach(form => {
@@ -312,6 +352,60 @@ $currentLang = $settings['language'] ?? 'pt';
                     }
                 });
             });
+            
+            let draggedRow = null;
+            const tbody = document.getElementById('tools-tbody');
+            
+            if (tbody) {
+                tbody.querySelectorAll('tr.draggable-row').forEach(row => {
+                    row.addEventListener('dragstart', function(e) {
+                        draggedRow = this;
+                        setTimeout(() => this.classList.add('dragging'), 0);
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    
+                    row.addEventListener('dragend', function() {
+                        this.classList.remove('dragging');
+                        draggedRow = null;
+                    });
+                    
+                    row.addEventListener('dragover', function(e) {
+                        e.preventDefault();
+                        if (draggedRow !== this) this.classList.add('drag-over');
+                    });
+                    
+                    row.addEventListener('dragleave', function() {
+                        this.classList.remove('drag-over');
+                    });
+                    
+                    row.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        this.classList.remove('drag-over');
+                        if (draggedRow && draggedRow !== this) {
+                            tbody.insertBefore(draggedRow, this.nextSibling || this);
+                            saveOrder();
+                        }
+                    });
+                });
+            }
+
+            function saveOrder() {
+                const rows = tbody.querySelectorAll('tr.draggable-row');
+                const orders = [];
+                rows.forEach((row, index) => {
+                    orders.push({ id: row.getAttribute('data-id'), order: index });
+                });
+                
+                const formData = new FormData();
+                formData.append('csrf_token', '<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>');
+                formData.append('action', 'reorder_tools');
+                formData.append('orders', JSON.stringify(orders));
+                
+                fetch('admin.php', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
         });
     </script>
 </body>
