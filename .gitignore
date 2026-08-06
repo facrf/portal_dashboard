@@ -24,3 +24,7 @@ icons/
 !icons/
 icons/*
 !icons/.htaccess
+
+#lixo feito por LLM
+cookie.txt
+*.cookie
