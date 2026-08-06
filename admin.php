@@ -371,18 +371,34 @@ $currentLang = $settings['language'] ?? 'pt';
                     
                     row.addEventListener('dragover', function(e) {
                         e.preventDefault();
-                        if (draggedRow !== this) this.classList.add('drag-over');
+                        const bounding = this.getBoundingClientRect();
+                        const offset = bounding.y + (bounding.height / 2);
+                        if (e.clientY - offset > 0) {
+                            this.style.borderBottom = '2px solid #007bff';
+                            this.style.borderTop = '';
+                        } else {
+                            this.style.borderTop = '2px solid #007bff';
+                            this.style.borderBottom = '';
+                        }
                     });
                     
                     row.addEventListener('dragleave', function() {
-                        this.classList.remove('drag-over');
+                        this.style.borderTop = '';
+                        this.style.borderBottom = '';
                     });
                     
                     row.addEventListener('drop', function(e) {
                         e.preventDefault();
-                        this.classList.remove('drag-over');
+                        this.style.borderTop = '';
+                        this.style.borderBottom = '';
                         if (draggedRow && draggedRow !== this) {
-                            tbody.insertBefore(draggedRow, this.nextSibling || this);
+                            const bounding = this.getBoundingClientRect();
+                            const offset = bounding.y + (bounding.height / 2);
+                            if (e.clientY - offset > 0) {
+                                tbody.insertBefore(draggedRow, this.nextSibling);
+                            } else {
+                                tbody.insertBefore(draggedRow, this);
+                            }
                             saveOrder();
                         }
                     });
