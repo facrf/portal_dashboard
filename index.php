@@ -103,6 +103,9 @@ class Pinger {
 // INTERCEPTADOR DE PING (AJAX API) - PROTEGIDO CONTRA SSRF
 // ==========================================
 if (isset($_GET['action']) && $_GET['action'] === 'ping') {
+    // Libera o lock da sessão para evitar que o fsockopen (lento) trave outras requisições AJAX (como o Drag & Drop)
+    session_write_close();
+
     header('Content-Type: application/json');
 
     // PROTEÇÃO CONTRA SSRF: Lista Branca baseada no banco de dados
@@ -507,7 +510,8 @@ foreach ($tools as $tool) {
             
             fetch('index.php', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                keepalive: true
             });
         }
 
