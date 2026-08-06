@@ -166,6 +166,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: index.php");
         exit;
     }
+    
+    if (isset($_POST['action']) && $_POST['action'] === 'reorder_tools' && isset($_POST['orders'])) {
+        $orders = json_decode($_POST['orders'], true);
+        if (is_array($orders)) {
+            $pdo->beginTransaction();
+            foreach ($orders as $order) {
+                $stmt = $pdo->prepare("UPDATE tools SET sort_order = ? WHERE id = ?");
+                $stmt->execute([$order['order'], $order['id']]);
+            }
+            $pdo->commit();
+            echo json_encode(['status' => 'ok']);
+        }
+        exit;
+    }
 }
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 
@@ -308,7 +322,7 @@ foreach ($tools as $tool) {
                             $toolNameLower = htmlspecialchars(mb_strtolower($tool['name']), ENT_QUOTES, 'UTF-8');
                             $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
                         ?>
-                            <a href="<?= $safeUrl ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
+                            <a href="<?= $safeUrl ?>" draggable="true" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
                                 <?php if (!empty($tool['tag_name'])): ?>
                                     <span class="tool-tag" style="background-color: <?= htmlspecialchars($tool['tag_color'], ENT_QUOTES, 'UTF-8') ?>;">
                                         <?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?>
@@ -476,7 +490,85 @@ foreach ($tools as $tool) {
                         errorBlock.style.display = 'block';
                     });
             });
+        // 4. Drag & Drop nativo para reordenar cards no dashboard
+        let draggedCard = null;
+
+        function saveCardOrder() {
+            const cards = document.querySelectorAll('.tool-card');
+            const orders = [];
+            cards.forEach((card, index) => {
+                orders.push({ id: card.getAttribute('data-id'), order: index });
+            });
+            
+            const formData = new FormData();
+            formData.append('csrf_token', '<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>');
+            formData.append('action', 'reorder_tools');
+            formData.append('orders', JSON.stringify(orders));
+            
+            fetch('index.php', {
+                method: 'POST',
+                body: formData
+            });
+        }
+
+        cards.forEach(card => {
+            card.addEventListener('dragstart', function(e) {
+                draggedCard = this;
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => this.style.opacity = '0.5', 0);
+            });
+
+            card.addEventListener('dragend', function() {
+                this.style.opacity = '1';
+                draggedCard = null;
+            });
+
+            card.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                const bounding = this.getBoundingClientRect();
+                // Usa eixo X (horizontal) e eixo Y (vertical) se for grid. O mais comum é verificar posição no Grid, mas X é eficiente
+                const offsetX = bounding.x + (bounding.width / 2);
+                if (e.clientX - offsetX > 0) {
+                    this.style.borderRight = '2px solid #007bff';
+                    this.style.borderLeft = '';
+                } else {
+                    this.style.borderLeft = '2px solid #007bff';
+                    this.style.borderRight = '';
+                }
+            });
+
+            card.addEventListener('dragleave', function() {
+                this.style.borderRight = '';
+                this.style.borderLeft = '';
+            });
+
+            card.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.borderRight = '';
+                this.style.borderLeft = '';
+                
+                if (draggedCard && draggedCard !== this) {
+                    // Para evitar que um card seja arrastado para outra categoria:
+                    const dragCat = draggedCard.closest('.category-items');
+                    const dropCat = this.closest('.category-items');
+                    
+                    if (dragCat === dropCat) {
+                        const bounding = this.getBoundingClientRect();
+                        const offsetX = bounding.x + (bounding.width / 2);
+                        
+                        if (e.clientX - offsetX > 0) {
+                            dropCat.insertBefore(draggedCard, this.nextSibling);
+                        } else {
+                            dropCat.insertBefore(draggedCard, this);
+                        }
+                        saveCardOrder();
+                    }
+                }
+            });
         });
+    });
     </script>
 </body>
 </html>
