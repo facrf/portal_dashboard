@@ -25,6 +25,7 @@ El **Portal Dashboard** es una alternativa minimalista y segura a herramientas c
 * 📱 **Diseño Responsivo:** Accede y gestiona tu homelab perfectamente desde tu ordenador, tableta o móvil.
 * 💾 **Persistencia Simple:** Configuraciones almacenadas localmente en una base de datos SQLite de un solo archivo.
 * 🎨 **Altamente Personalizable:** Crea categorías, añade enlaces de servicios y organiza el diseño según tus necesidades.
+* 🔒 **Privacidad Total:** Fuentes y recursos 100% alojados localmente. Sin llamadas a APIs de terceros (como Google Fonts).
 
 ---
 

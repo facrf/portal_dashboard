@@ -25,6 +25,7 @@
 * 📱 **Responsive Design:** Access and manage your homelab perfectly from your computer, tablet, or phone.
 * 💾 **Simple Persistence:** Settings stored locally in a single-file SQLite database.
 * 🎨 **Highly Customizable:** Create categories, add service links, and organize the layout according to your needs.
+* 🔒 **Total Privacy:** 100% self-hosted fonts and assets. No third-party API calls (like Google Fonts).
 
 ---
 
