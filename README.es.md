@@ -22,6 +22,7 @@ El **Portal Dashboard** es una alternativa minimalista y segura a herramientas c
 ## ✨ Características
 
 * 🚀 **Inicio Instantáneo:** Sin bases de datos pesadas ni procesos de configuración complejos.
+* 📶 **Monitoreo Inteligente:** El panel prueba automáticamente y en tiempo real si tus servicios están en línea, validando tanto solicitudes HTTP como conexiones directas a IPs o puertos (TCP/NTP) locales.
 * 📱 **Diseño Responsivo:** Accede y gestiona tu homelab perfectamente desde tu ordenador, tableta o móvil.
 * 💾 **Persistencia Simple:** Configuraciones almacenadas localmente en una base de datos SQLite de un solo archivo.
 * 🎨 **Altamente Personalizable:** Crea categorías, añade enlaces de servicios y organiza el diseño según tus necesidades.

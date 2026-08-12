@@ -68,6 +68,9 @@ class Pinger {
         // 2. Método padrão: teste HTTP HEAD (Para sites e web apps normais)
         if (isset($params['url'])) {
             $url = trim($params['url']);
+            if (strpos($url, '://') === false) {
+                $url = 'http://' . $url;
+            }
             $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
             if (filter_var($url, FILTER_VALIDATE_URL) && in_array($scheme, ['http', 'https'], true)) {
                 $context = stream_context_create([
@@ -125,8 +128,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
         $requestedHost = strtolower(rtrim(trim($_GET['host']), '.'));
         $requestedPort = (int) $_GET['port'];
         foreach ($pdo->query("SELECT url FROM tools")->fetchAll(PDO::FETCH_COLUMN) as $registeredUrl) {
-            $registeredHost = strtolower(rtrim((string) parse_url($registeredUrl, PHP_URL_HOST), '.'));
-            $registeredPort = parse_url($registeredUrl, PHP_URL_PORT);
+            $parsedUrl = parse_url(strpos($registeredUrl, '://') === false ? 'tcp://' . $registeredUrl : $registeredUrl);
+            $registeredHost = strtolower(rtrim((string) ($parsedUrl['host'] ?? ''), '.'));
+            $registeredPort = $parsedUrl['port'] ?? null;
             if ($registeredHost === $requestedHost && (int) $registeredPort === $requestedPort) {
                 $isAllowed = true;
                 $pingParams['host'] = $requestedHost;
@@ -175,8 +179,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (is_array($orders)) {
             $pdo->beginTransaction();
             foreach ($orders as $order) {
-                $stmt = $pdo->prepare("UPDATE tools SET sort_order = ? WHERE id = ?");
-                $stmt->execute([$order['order'], $order['id']]);
+                if (isset($order['order'], $order['id'])) {
+                    $stmt = $pdo->prepare("UPDATE tools SET sort_order = ? WHERE id = ?");
+                    $stmt->execute([$order['order'], $order['id']]);
+                }
             }
             $pdo->commit();
             echo json_encode(['status' => 'ok']);
@@ -224,9 +230,9 @@ foreach ($tools as $tool) {
     <link rel="stylesheet" href="style.css?v=<?= time() ?>">
     <style>
         :root {
-            --bg-color: <?= htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') ?>;
+            --bg-color: <?= htmlspecialchars($settings['bg_color'] ?? '', ENT_QUOTES, 'UTF-8') ?>;
             --bg-image: <?= $bgImageStyle ?>;
-            --text-color: <?= htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') ?>;
+            --text-color: <?= htmlspecialchars($settings['text_color'] ?? '', ENT_QUOTES, 'UTF-8') ?>;
         }
     </style>
 </head>
@@ -295,12 +301,12 @@ foreach ($tools as $tool) {
                 <?php endif; ?>
                 
                 <?php if ($showGreeting): ?>
-                let greeting = '<?= htmlspecialchars(t('dashboard'), ENT_QUOTES, 'UTF-8') ?>';
+                let greeting = <?= json_encode(t('dashboard')) ?>;
                 if (now.getHours() >= 5 && now.getHours() < 12) greeting = 'Bom dia';
                 else if (now.getHours() >= 12 && now.getHours() < 18) greeting = 'Boa tarde';
                 else greeting = 'Boa noite';
                 
-                document.getElementById('clock-greeting').textContent = greeting + ', <?= htmlspecialchars($settings['greeting_name'] ?? 'Administrador', ENT_QUOTES, 'UTF-8') ?>.';
+                document.getElementById('clock-greeting').textContent = greeting + ', ' + <?= json_encode($settings['greeting_name'] ?? 'Administrador') ?> + '.';
                 <?php endif; ?>
             }
             setInterval(updateClock, 1000);
@@ -433,8 +439,8 @@ foreach ($tools as $tool) {
 
             // 3. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
             const cards = document.querySelectorAll('.tool-card');
-            const txtRunning = '<?= htmlspecialchars(t('status_running'), ENT_QUOTES, 'UTF-8') ?>';
-            const txtError = '<?= htmlspecialchars(t('status_error'), ENT_QUOTES, 'UTF-8') ?>';
+            const txtRunning = <?= json_encode(t('status_running')) ?>;
+            const txtError = <?= json_encode(t('status_error')) ?>;
             
             cards.forEach(card => {
                 const urlStr = card.getAttribute('data-url').trim();

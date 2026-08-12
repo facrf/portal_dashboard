@@ -22,6 +22,7 @@
 ## ✨ Features
 
 * 🚀 **Instant Startup:** No heavy databases or complex setup processes.
+* 📶 **Smart Monitoring:** The dashboard automatically tests in real-time whether your services are online, validating both HTTP requests and direct connections to local IPs or (TCP/NTP) ports.
 * 📱 **Responsive Design:** Access and manage your homelab perfectly from your computer, tablet, or phone.
 * 💾 **Simple Persistence:** Settings stored locally in a single-file SQLite database.
 * 🎨 **Highly Customizable:** Create categories, add service links, and organize the layout according to your needs.

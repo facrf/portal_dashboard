@@ -22,6 +22,7 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 ## ✨ Funcionalidades
 
 * 🚀 **Inicialização Instantânea:** Sem bancos de dados pesados ou processos de setup complexos.
+* 📶 **Monitoramento Inteligente:** O painel testa automaticamente e em tempo real se seus serviços estão online, validando tanto requisições HTTP quanto conexões diretas a IPs ou portas (TCP/NTP) locais.
 * 📱 **Design Responsivo:** Acesse e gerencie seu homelab perfeitamente pelo computador, tablet ou celular.
 * 💾 **Persistência Simples:** Configurações armazenadas localmente em um banco de dados SQLite de arquivo único.
 * 🎨 **Altamente Customizável:** Crie categorias, adicione links de serviços e organize o layout de acordo com sua necessidade.
