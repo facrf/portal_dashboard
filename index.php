@@ -330,13 +330,22 @@ foreach ($tools as $tool) {
                             $safeUrl = htmlspecialchars($safeUrl, ENT_QUOTES, 'UTF-8');
                             $toolNameLower = htmlspecialchars(mb_strtolower($tool['name']), ENT_QUOTES, 'UTF-8');
                             $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
+
+                            // Aceita somente a cor hexadecimal gerada pelo seletor do painel.
+                            $toolTagColor = trim((string) ($tool['tag_color'] ?? ''));
+                            if (!preg_match('/^#[0-9a-f]{6}$/i', $toolTagColor)) {
+                                $toolTagColor = '#6366f1';
+                            }
+
+                            // Define automaticamente texto claro ou escuro para manter o contraste da tag.
+                            $tagRed = hexdec(substr($toolTagColor, 1, 2));
+                            $tagGreen = hexdec(substr($toolTagColor, 3, 2));
+                            $tagBlue = hexdec(substr($toolTagColor, 5, 2));
+                            $toolTagTextColor = (($tagRed * 299 + $tagGreen * 587 + $tagBlue * 114) / 1000) > 160
+                                ? '#111827'
+                                : '#ffffff';
                         ?>
                             <a href="<?= $safeUrl ?>" draggable="true" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
-                                <?php if (!empty($tool['tag_name'])): ?>
-                                    <span class="tool-tag" style="background-color: <?= htmlspecialchars($tool['tag_color'], ENT_QUOTES, 'UTF-8') ?>;">
-                                        <?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?>
-                                    </span>
-                                <?php endif; ?>
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
@@ -357,6 +366,15 @@ foreach ($tools as $tool) {
                                 <div class="error-block">
                                     <strong>!</strong> <?= t('status_error') ?> / Offline
                                 </div>
+
+                                <?php if (!empty($tool['tag_name'])): ?>
+                                    <div class="card-meta">
+                                        <span
+                                            class="tool-tag"
+                                            style="--tool-tag-color: <?= $toolTagColor ?>; --tool-tag-text-color: <?= $toolTagTextColor ?>;"
+                                        ><?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                <?php endif; ?>
                             </a>
                         <?php endforeach; ?>
                         

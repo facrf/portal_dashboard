@@ -460,6 +460,39 @@ input[type="color"]::-webkit-color-swatch {
     white-space: nowrap;
 }
 
+/* Metadados do card: mantém a tag no rodapé sem sobrepor título ou status. */
+.card-meta {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 0;
+    margin-top: 0.7rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.tool-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(100%, 14rem);
+    min-height: 1.5rem;
+    padding: 0.25rem 0.65rem;
+    overflow: hidden;
+    color: var(--tool-tag-text-color, #ffffff);
+    background-color: var(--tool-tag-color, #6366f1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.045em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 /* Painel de Administração & Form */
 .admin-panel {
     background: var(--card-bg);
@@ -905,6 +938,17 @@ body.light-theme .btn-glow {
         margin-top: 5px;
     }
 
+    .card-meta {
+        margin-top: 0.6rem;
+        padding-top: 0.5rem;
+    }
+
+    .tool-tag {
+        min-height: 1.4rem;
+        padding: 0.22rem 0.55rem;
+        font-size: 0.62rem;
+    }
+
     .admin-panel {
         padding: 1.25rem 1rem;
     }
@@ -994,4 +1038,4 @@ body.light-theme .btn-glow {
         width: 100%;
         text-align: center;
     }
-}.tool-tag { position: absolute; top: -10px; right: -10px; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 10; letter-spacing: 0.5px; }
+}
