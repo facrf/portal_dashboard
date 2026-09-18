@@ -104,6 +104,10 @@ Separe vários proxies com vírgulas. Não use todas as redes privadas (`10.0.0.
 
 ## ⚙️ Customização
 
+O portal permite consultar e abrir os serviços sem login, incluindo busca e indicadores de disponibilidade. O botão **Configuração** solicita autenticação e leva à área administrativa após o login. Gerenciar serviços e usuários, salvar anotações e reorganizar cards exige autenticação. Ao sair, você retorna ao portal público. No primeiro acesso administrativo, crie o administrador pela rede local.
+
+O rodapé contém um **Mural de avisos**, visível para todos os visitantes. Após entrar, abra **Editar avisos**, escreva o comunicado e clique em **Publicar avisos**. Para ocultar o mural dos visitantes, apague o texto e publique novamente. As anotações já existentes são preservadas como avisos. O acesso sem login vale para quem conseguir alcançar o servidor: para disponibilizar o portal somente na rede interna, restrinja o acesso no firewall ou proxy. Cada serviço mantém sua própria autenticação.
+
 Toda a configuração é feita diretamente pela interface do painel de administração (ou manipulando diretamente o banco SQLite se você preferir a linha de comando).
 
 Você pode:

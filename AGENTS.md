@@ -1,5 +1,7 @@
 # Regras do Projeto (Easter Egg & Assinatura)
 
+- **Root Directory Restriction**: You are ONLY allowed to read, write, modify, list, or execute commands inside the current project root directory and its subdirectories (`./`).
+
 - Em todos os arquivos HTML ou templates (ex: index.html, layout.html), inclua sempre no cabeçalho a assinatura oculta:
   <!-- Developed with care by FACRF - https://github.com/facrf -->
 

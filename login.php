@@ -8,12 +8,18 @@
  */
 require_once 'db.php';
 
+// Somente destinos administrativos internos são aceitos.
+$next = $_POST['next'] ?? $_GET['next'] ?? 'config.php';
+if (!in_array($next, ['admin.php', 'config.php'], true)) {
+    $next = 'config.php';
+}
+
 // 1. PRIMEIRO: Verifica a requisição de Logout (Agora via POST e com proteção CSRF)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'logout') {
     if (!empty($_POST['csrf_token']) && hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {
         session_destroy();
         setcookie(session_name(), '', time() - 3600, '/');
-        header("Location: login.php");
+        header("Location: index.php");
         exit;
     } else {
         die("Tentativa de logout bloqueada por falha de segurança (CSRF).");
@@ -21,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // 2. DEPOIS: Se já estiver logado, redireciona
-if (!empty($_SESSION['logged_in'])) {
-    header("Location: index.php");
+if ($isAuthenticated) {
+    header('Location: ' . $next);
     exit;
 }
 
@@ -103,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['logged_in'] = true;
                 $_SESSION['username'] = $username;
-                header("Location: index.php");
+                header('Location: ' . $next);
                 exit;
             }
         } else {
@@ -124,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $_SESSION['logged_in'] = true;
                 $_SESSION['username'] = $user['username'];
-                header("Location: index.php");
+                header('Location: ' . $next);
                 exit;
                 
             } else {
@@ -189,7 +195,7 @@ $currentLang = $settings['language'] ?? 'pt';
             <h2><?= $isFirstAccess ? 'Configurar Administrador' : 'Acesso Restrito' ?></h2>
             
             <?php if ($isFirstAccess): ?>
-                <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;">Crie o primeiro usuário para acessar o painel.</p>
+                <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;">Crie o primeiro usuário para administrar o portal.</p>
             <?php endif; ?>
 
             <?php if ($error): ?>
@@ -197,6 +203,7 @@ $currentLang = $settings['language'] ?? 'pt';
             <?php endif; ?>
 
             <form method="POST">
+                <input type="hidden" name="next" value="<?= htmlspecialchars($next, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <div class="form-group">
                     <label>Usuário:</label>
@@ -208,6 +215,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 </div>
                 <button type="submit" class="btn btn-glow"><?= $isFirstAccess ? 'Cadastrar e Entrar' : 'Entrar' ?></button>
             </form>
+            <p><a href="index.php" class="btn">← <?= t('dashboard') ?></a></p>
         </div>
     </div>
 </body>

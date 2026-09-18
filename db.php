@@ -205,48 +205,33 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 // ==========================================
-// GATE DE AUTENTICAÇÃO (PROTEGE TODAS AS PÁGINAS)
+// AUTENTICAÇÃO: PORTAL PÚBLICO, ALTERAÇÕES E ADMINISTRAÇÃO PROTEGIDAS
 // ==========================================
 $currentFile = basename($_SERVER['PHP_SELF']);
-$isPing = (isset($_GET['action']) && $_GET['action'] === 'ping');
+$isAuthenticated = false;
+if (!empty($_SESSION['logged_in']) && !empty($_SESSION['username'])) {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
+    $stmt->execute([$_SESSION['username']]);
+    $isAuthenticated = $stmt->fetchColumn() > 0;
+    if (!$isAuthenticated) {
+        unset($_SESSION['logged_in'], $_SESSION['username']);
+        session_regenerate_id(true);
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+}
 
-if ($currentFile !== 'login.php') {
-    // 1. Quantos usuários temos no banco?
-    $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    
-    // Se não há usuários, BLOQUEIA TUDO e obriga a ir para o setup
-    if ($userCount == 0) {
-        header("Location: login.php");
+$isPublicPortal = $currentFile === 'index.php'
+    && in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true);
+if ($currentFile !== 'login.php' && !$isPublicPortal && !$isAuthenticated) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['status' => 'error', 'msg' => 'Autenticação necessária.']);
         exit;
     }
-
-    // 2. Se chegou aqui, existe usuário. Exige validação rigorosa.
-    $unauthorized = true; // Assumimos bloqueio por padrão
-    
-    if (!empty($_SESSION['logged_in']) && !empty($_SESSION['username'])) {
-        // A sessão existe, mas o usuário AINDA ESTÁ no banco?
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
-        $stmt->execute([$_SESSION['username']]);
-        
-        if ($stmt->fetchColumn() > 0) {
-            $unauthorized = false; // Tudo certo, passe livre!
-        } else {
-            // Fantasma detectado!
-            session_destroy();
-            setcookie(session_name(), '', time() - 3600, '/');
-        }
-    }
-
-    // 3. Executa o bloqueio se falhou na verificação
-    if ($unauthorized) {
-        if ($isPing) {
-            header('Content-Type: application/json');
-            echo json_encode(['status' => 'error', 'msg' => 'Unauthorized']);
-            exit;
-        }
-        header("Location: login.php");
-        exit;
-    }
+    $destination = in_array($currentFile, ['admin.php', 'config.php'], true) ? $currentFile : 'config.php';
+    header('Location: login.php?next=' . urlencode($destination));
+    exit;
 }
 
 // ==========================================

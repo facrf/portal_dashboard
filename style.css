@@ -654,14 +654,15 @@ tr:hover td {
     text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
 
-/* Footer / Notes Section */
+/* Rodapé / Mural de avisos */
 .notes-section {
     margin-top: 4rem;
     padding-top: 2rem;
     border-top: 1px solid var(--card-border);
 }
 
-.notes-form {
+.notes-form,
+.notice-board {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -673,6 +674,40 @@ tr:hover td {
     border: 1px solid var(--card-border);
     box-shadow: var(--shadow-lg);
     transition: all 0.3s ease;
+}
+
+.notice-board h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.notice-content {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.7;
+}
+
+.notice-help {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.notice-editor {
+    margin-top: 1rem;
+}
+
+.notice-editor summary {
+    cursor: pointer;
+    padding: 0.75rem 0;
+    font-weight: 600;
+}
+
+.notice-editor summary:focus-visible {
+    outline: 2px solid var(--input-focus-border);
+    outline-offset: 4px;
 }
 
 .notes-form label {

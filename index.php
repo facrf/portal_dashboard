@@ -163,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (isset($_POST['action']) && $_POST['action'] === 'logout') {
         session_destroy();
-        header("Location: login.php");
+        header("Location: index.php");
         exit;
     }
 
@@ -261,13 +261,17 @@ foreach ($tools as $tool) {
                 </div>
 
                 <div class="header-nav">
+                    <?php if ($isAuthenticated): ?>
                     <a href="admin.php" class="btn"><?= t('settings') ?></a>
+                    <?php endif; ?>
                     <a href="config.php" class="btn"><?= t('appearance_tabs') ?></a>
+                    <?php if ($isAuthenticated): ?>
                     <form method="POST" action="login.php" style="display: inline; margin: 0;">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="action" value="logout">
                         <button type="submit" class="btn btn-danger"><?= t('logout') ?></button>
                     </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </header>
@@ -306,7 +310,7 @@ foreach ($tools as $tool) {
                 else if (now.getHours() >= 12 && now.getHours() < 18) greeting = 'Boa tarde';
                 else greeting = 'Boa noite';
                 
-                document.getElementById('clock-greeting').textContent = greeting + ', ' + <?= json_encode($settings['greeting_name'] ?? 'Administrador') ?> + '.';
+                document.getElementById('clock-greeting').textContent = greeting + <?= json_encode($isAuthenticated ? ', ' . ($settings['greeting_name'] ?? 'Administrador') . '.' : '!') ?>;
                 <?php endif; ?>
             }
             setInterval(updateClock, 1000);
@@ -345,7 +349,7 @@ foreach ($tools as $tool) {
                                 ? '#111827'
                                 : '#ffffff';
                         ?>
-                            <a href="<?= $safeUrl ?>" draggable="true" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
+                            <a href="<?= $safeUrl ?>" draggable="<?= $isAuthenticated ? 'true' : 'false' ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
@@ -383,24 +387,41 @@ foreach ($tools as $tool) {
             <?php endforeach; ?>
         </div>
 
-        <footer class="notes-section">
-            <form method="POST" class="notes-form">
+        <?php $hasNotice = trim((string) ($settings['footer_text'] ?? '')) !== ''; ?>
+        <?php if ($isAuthenticated || $hasNotice): ?>
+        <footer class="notes-section" aria-labelledby="notices-title">
+            <section class="notice-board">
+                <h2 id="notices-title"><?= t('notices') ?></h2>
+                <?php if ($hasNotice): ?>
+                    <p class="notice-content"><?= htmlspecialchars($settings['footer_text'], ENT_QUOTES, 'UTF-8') ?></p>
+                <?php else: ?>
+                    <p class="notice-help"><?= t('notices_empty') ?></p>
+                <?php endif; ?>
+            </section>
+            <?php if ($isAuthenticated): ?>
+            <details class="notice-editor" <?= !$hasNotice ? 'open' : '' ?>>
+                <summary><?= t('edit_notices') ?></summary>
+                <form method="POST" class="notes-form">
                 <input type="hidden" name="action" value="update_footer">
                 
                 <!-- Token adicionado aqui (Proteção CSRF) -->
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                 
-                <label for="footer_text"><?= t('notes') ?></label>
-                <textarea name="footer_text" id="footer_text" placeholder="..."><?= htmlspecialchars($settings['footer_text'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
-                <button type="submit" class="btn"><?= t('save_notes') ?></button>
-            </form>
+                <label for="footer_text"><?= t('notices') ?></label>
+                <p id="notices-help" class="notice-help"><?= t('notices_help') ?></p>
+                <textarea name="footer_text" id="footer_text" aria-describedby="notices-help" placeholder="<?= htmlspecialchars(t('notices_placeholder'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($settings['footer_text'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                <button type="submit" class="btn"><?= t('publish_notices') ?></button>
+                </form>
+            </details>
+            <?php endif; ?>
         </footer>
+        <?php endif; ?>
     </div>
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
     
-            // 1. Efeito PROC para o botão salvar do Bloco de Notas
+            // 1. Destaca a publicação quando o aviso é editado
             const notesForm = document.querySelector('.notes-form');
             if (notesForm) {
                 notesForm.addEventListener('input', () => {
@@ -517,6 +538,7 @@ foreach ($tools as $tool) {
                         errorBlock.style.display = 'block';
                     });
             });
+        <?php if ($isAuthenticated): ?>
         // 4. Drag & Drop nativo para reordenar cards no dashboard
         let draggedCard = null;
 
@@ -596,6 +618,7 @@ foreach ($tools as $tool) {
                 }
             });
         });
+        <?php endif; ?>
     });
     </script>
 </body>
