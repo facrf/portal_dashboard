@@ -57,10 +57,12 @@ Puedes ejecutar Portal Dashboard directamente en tu servidor web preferido o med
    ```
 
 3. **Configurar Permisos:**
-   Asegúrate de que el usuario del servidor web (por ejemplo, `www-data`) tenga permisos de lectura y escritura en la carpeta del proyecto para manipular la base de datos SQLite:
+   La base de datos local se guarda en `db_data/bd.db`. Da acceso de escritura solamente a ese directorio:
    ```bash
-   sudo chown -R www-data:www-data /ruta/a/portal_dashboard
+   mkdir -p /ruta/a/portal_dashboard/db_data
+   sudo chown -R www-data:www-data /ruta/a/portal_dashboard/db_data
    ```
+   Define `PORTAL_DB_PATH` con una ruta completa si deseas guardarla en otro lugar.
 
 4. **Acceder en el Navegador:**
    Accede a `http://localhost/portal_dashboard` (o la IP de tu servidor).
@@ -100,6 +102,8 @@ Si el portal está detrás de un proxy inverso, confía únicamente en la IP (o 
 
 Separa varios proxies con comas. No utilices todos los rangos privados (`10.0.0.0/8`, `172.16.0.0/12` o `192.168.0.0/16`); prefiere la IP fija de Nginx Proxy Manager, Traefik o Cloudflare Tunnel. El proxy debe sobrescribir o añadir correctamente `X-Forwarded-For` y `X-Forwarded-Proto`. En acceso directo, deja la variable sin definir.
 
+La imagen no incluye iconos de terceros. Monta tu propio directorio en `/var/www/html/icons`, usa un archivo de ese volumen o indica una URL de icono.
+
 ---
 
 ## ⚙️ Personalización
@@ -111,11 +115,22 @@ Puedes:
 * Agrupar servicios por categorías (por ejemplo, Multimedia, Monitoreo, Red).
 * Definir enlaces internos (para uso local) y externos (mediante túneles/proxy inverso) para el mismo servicio.
 
+El estado de los servicios se consulta en lotes y se almacena en caché durante 45 segundos.
+
+Para ejecutar la misma validación del CI:
+
+```bash
+docker build -t portal-dashboard:test .
+docker run --rm portal-dashboard:test php tests/run.php
+```
+
 ---
 
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia GNU GPL v3. Esto significa que eres libre de usar, modificar y distribuir el software, siempre que mantengas los cambios bajo la misma licencia de código abierto. Consulta el archivo LICENSE para más detalles.
+
+Consulta también el [changelog](CHANGELOG.md) para conocer los detalles de actualización y migración.
 
 ---
 

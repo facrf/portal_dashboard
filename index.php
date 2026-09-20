@@ -102,20 +102,66 @@ class Pinger {
     }
 }
 
+function pingParametersForUrl(string $url): array {
+    $hasScheme = strpos($url, '://') !== false;
+    $candidate = $hasScheme ? $url : 'tcp://' . $url;
+    $parts = parse_url($candidate);
+    if ($parts !== false && !empty($parts['host'])) {
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $port = isset($parts['port']) ? (int) $parts['port'] : null;
+        if ((!$hasScheme && $port !== null) || $scheme === 'udp' || ($hasScheme && $scheme === 'tcp') || ($port !== null && !in_array($port, [80, 443], true))) {
+            return ['host' => (string) $parts['host'], 'port' => $port ?? ($scheme === 'udp' ? 123 : 80)];
+        }
+    }
+    return ['url' => $url];
+}
+
 // ==========================================
 // INTERCEPTADOR DE PING (AJAX API) - PROTEGIDO CONTRA SSRF
 // ==========================================
-if (isset($_GET['action']) && $_GET['action'] === 'ping') {
+$healthAction = is_string($_GET['action'] ?? null) ? $_GET['action'] : '';
+if (in_array($healthAction, ['ping', 'status'], true)) {
     // Libera o lock da sessão para evitar que o fsockopen (lento) trave outras requisições AJAX (como o Drag & Drop)
     session_write_close();
 
     header('Content-Type: application/json');
 
-    // PROTEÇÃO CONTRA SSRF: Lista Branca baseada no banco de dados
+    if ($healthAction === 'status') {
+        $idsRaw = is_string($_GET['ids'] ?? null) ? $_GET['ids'] : '';
+        $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $idsRaw)), fn($id) => $id > 0)));
+        if ($ids === [] || count($ids) > 10) jsonResponse(['status' => 'error', 'msg' => 'Lista de serviços inválida.'], 422);
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $pdo->prepare("SELECT id, url FROM tools WHERE id IN ({$placeholders})");
+        $stmt->execute($ids);
+        $registeredTools = $stmt->fetchAll();
+        $cacheStmt = $pdo->prepare("SELECT status, checked_at FROM health_cache WHERE tool_id = ?");
+        $saveCache = $pdo->prepare("INSERT INTO health_cache (tool_id, status, checked_at) VALUES (?, ?, ?) ON CONFLICT(tool_id) DO UPDATE SET status=excluded.status, checked_at=excluded.checked_at");
+        $results = [];
+        $now = time();
+
+        foreach ($registeredTools as $tool) {
+            $toolId = (int) $tool['id'];
+            $cacheStmt->execute([$toolId]);
+            $cached = $cacheStmt->fetch();
+            if ($cached && $now - (int) $cached['checked_at'] <= 45) {
+                $online = (bool) $cached['status'];
+                $checkedAt = (int) $cached['checked_at'];
+            } else {
+                $online = Pinger::check(pingParametersForUrl($tool['url']));
+                $checkedAt = $now;
+                $saveCache->execute([$toolId, $online ? 1 : 0, $checkedAt]);
+            }
+            $results[(string) $toolId] = ['status' => $online ? 'ok' : 'error', 'checked_at' => $checkedAt];
+        }
+        jsonResponse(['status' => 'ok', 'results' => $results]);
+    }
+
+    // Compatibilidade com clientes antigos: lista branca baseada no banco de dados.
     $isAllowed = false;
     $pingParams = [];
     
-    if (!empty($_GET['url'])) {
+    if (is_string($_GET['url'] ?? null) && $_GET['url'] !== '') {
         // Só permite se a exata URL existir nos cadastros
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM tools WHERE url = ?");
         $stmt->execute([$_GET['url']]);
@@ -123,7 +169,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
             $isAllowed = true;
             $pingParams['url'] = $_GET['url'];
         }
-    } elseif (!empty($_GET['host']) && isset($_GET['port'])) {
+    } elseif (is_string($_GET['host'] ?? null) && $_GET['host'] !== '' && is_scalar($_GET['port'] ?? null)) {
         // Compara host e porta analisados, evitando correspondência parcial via LIKE.
         $requestedHost = strtolower(rtrim(trim($_GET['host']), '.'));
         $requestedPort = (int) $_GET['port'];
@@ -157,37 +203,56 @@ if (isset($_GET['action']) && $_GET['action'] === 'ping') {
 
 // Salva o texto do bloco de notas do rodapé - PROTEGIDO CONTRA CSRF
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die("Invalid CSRF token");
+    try {
+        requireCsrfToken($_POST);
+    } catch (InvalidArgumentException $e) {
+        die(htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
     }
 
     if (isset($_POST['action']) && $_POST['action'] === 'logout') {
         session_destroy();
+        setcookie(session_name(), '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $isSecure,
+            'httponly' => true,
+            'samesite' => 'Strict'
+        ]);
         header("Location: index.php");
         exit;
     }
 
     if (isset($_POST['action']) && $_POST['action'] === 'update_footer') {
+        try {
+            $footerText = inputString($_POST, 'footer_text', 5000);
+        } catch (InvalidArgumentException $e) {
+            http_response_code(422);
+            die(htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
+        }
         $stmt = $pdo->prepare("UPDATE settings SET footer_text=? WHERE id=1");
-        $stmt->execute([$_POST['footer_text']]);
+        $stmt->execute([$footerText]);
         header("Location: index.php");
         exit;
     }
     
     if (isset($_POST['action']) && $_POST['action'] === 'reorder_tools' && isset($_POST['orders'])) {
-        $orders = json_decode($_POST['orders'], true);
-        if (is_array($orders)) {
+        $ordersRaw = is_string($_POST['orders']) ? $_POST['orders'] : '';
+        $orders = json_decode($ordersRaw, true);
+        if (is_array($orders) && count($orders) <= 5000) {
             $pdo->beginTransaction();
             foreach ($orders as $order) {
-                if (isset($order['order'], $order['id'])) {
+                if (is_array($order)) {
+                    $id = filter_var($order['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                    $position = filter_var($order['order'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 4999]]);
+                    if ($id === false || $position === false) continue;
                     $stmt = $pdo->prepare("UPDATE tools SET sort_order = ? WHERE id = ?");
-                    $stmt->execute([$order['order'], $order['id']]);
+                    $stmt->execute([(int) $position, (int) $id]);
                 }
             }
             $pdo->commit();
-            echo json_encode(['status' => 'ok']);
+            jsonResponse(['status' => 'ok']);
         }
-        exit;
+        jsonResponse(['status' => 'error', 'msg' => 'Ordenação inválida.'], 422);
     }
 }
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
@@ -227,12 +292,12 @@ foreach ($tools as $tool) {
         <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
     
-    <link rel="stylesheet" href="style.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
     <style>
         :root {
-            --bg-color: <?= htmlspecialchars($settings['bg_color'] ?? '', ENT_QUOTES, 'UTF-8') ?>;
+            --bg-color: <?= validatedColor((string) ($settings['bg_color'] ?? ''), '#1e1e2e') ?>;
             --bg-image: <?= $bgImageStyle ?>;
-            --text-color: <?= htmlspecialchars($settings['text_color'] ?? '', ENT_QUOTES, 'UTF-8') ?>;
+            --text-color: <?= validatedColor((string) ($settings['text_color'] ?? ''), '#cdd6f4') ?>;
         }
     </style>
 </head>
@@ -254,11 +319,11 @@ foreach ($tools as $tool) {
             </div>
 
             <div class="header-controls">
-                <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Toggle Theme">
+                <button type="button" class="theme-toggle-wrapper" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Theme">
                     <svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm9-4h-2c-.55 0-1 .45-1 1s.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1zM4 12c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zm7-9V1c0-.55-.45-1-1-1s-1 .45-1 1v2c0 .55.45 1 1 1s1-.45 1-1zm0 18v2c0 .55-.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zm7.66-13.88l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zM4.93 19.07l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zm14.14 0c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.41-1.41c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.41zM6.34 6.34c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L6.34 3.51c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.42z"/></svg>
                     <div class="toggle-slot"><div class="toggle-button"></div></div>
                     <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4C12.92 3.04 12.46 3 12 3z"/></svg>
-                </div>
+                </button>
 
                 <div class="header-nav">
                     <?php if ($isAuthenticated): ?>
@@ -305,10 +370,9 @@ foreach ($tools as $tool) {
                 <?php endif; ?>
                 
                 <?php if ($showGreeting): ?>
-                let greeting = <?= json_encode(t('dashboard')) ?>;
-                if (now.getHours() >= 5 && now.getHours() < 12) greeting = 'Bom dia';
-                else if (now.getHours() >= 12 && now.getHours() < 18) greeting = 'Boa tarde';
-                else greeting = 'Boa noite';
+                let greeting = <?= json_encode(t('greeting_evening')) ?>;
+                if (now.getHours() >= 5 && now.getHours() < 12) greeting = <?= json_encode(t('greeting_morning')) ?>;
+                else if (now.getHours() >= 12 && now.getHours() < 18) greeting = <?= json_encode(t('greeting_afternoon')) ?>;
                 
                 document.getElementById('clock-greeting').textContent = greeting + <?= json_encode($isAuthenticated ? ', ' . ($settings['greeting_name'] ?? 'Administrador') . '.' : '!') ?>;
                 <?php endif; ?>
@@ -409,7 +473,7 @@ foreach ($tools as $tool) {
                 
                 <label for="footer_text"><?= t('notices') ?></label>
                 <p id="notices-help" class="notice-help"><?= t('notices_help') ?></p>
-                <textarea name="footer_text" id="footer_text" aria-describedby="notices-help" placeholder="<?= htmlspecialchars(t('notices_placeholder'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($settings['footer_text'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                <textarea name="footer_text" id="footer_text" maxlength="5000" aria-describedby="notices-help" placeholder="<?= htmlspecialchars(t('notices_placeholder'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($settings['footer_text'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
                 <button type="submit" class="btn"><?= t('publish_notices') ?></button>
                 </form>
             </details>
@@ -476,68 +540,33 @@ foreach ($tools as $tool) {
                 });
             }
 
-            // 3. Sistema de Checagem Assíncrona Inteligente (HTTP ou TCP Port)
+            // 3. Checagem em lotes, com cache no servidor para evitar uma requisição por card.
             const cards = document.querySelectorAll('.tool-card');
             const txtRunning = <?= json_encode(t('status_running')) ?>;
             const txtError = <?= json_encode(t('status_error')) ?>;
-            
-            cards.forEach(card => {
-                const urlStr = card.getAttribute('data-url').trim();
+            const cardMap = new Map(Array.from(cards, card => [card.dataset.id, card]));
+            const ids = Array.from(cardMap.keys());
+
+            function renderHealth(card, online) {
                 const badge = card.querySelector('.status-badge');
                 const errorBlock = card.querySelector('.error-block');
+                badge.textContent = online ? txtRunning : txtError;
+                badge.className = `status-badge ${online ? 'status-ok' : 'status-error'}`;
+                errorBlock.style.display = online ? 'none' : 'block';
+            }
 
-                let queryUrl = '';
-
-                try {
-                    // Tenta processar como URL válida
-                    let urlObj = new URL(urlStr);
-                    
-                    // Se a URL tiver uma porta definida (e não for porta web padrão 80/443)
-                    if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') {
-                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(urlObj.hostname)}&port=${urlObj.port}`;
-                    } else {
-                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
-                    }
-                } catch (e) {
-                    // Fallback caso seja apenas IP:PORTA sem "http://" cadastrado
-                    const portMatch = urlStr.match(/:(\d+)$/);
-                    if (portMatch) {
-                        const parts = urlStr.split(':');
-                        const host = parts[0].replace('//', '');
-                        const port = portMatch[1];
-                        queryUrl = `index.php?action=ping&host=${encodeURIComponent(host)}&port=${port}`;
-                    } else {
-                        queryUrl = 'index.php?action=ping&url=' + encodeURIComponent(urlStr);
-                    }
-                }
-
-                // Proteção extra no Front-End para não disparar ping em links bloqueados
-                if (urlStr === '#blocked') {
-                    badge.textContent = txtError;
-                    badge.className = 'status-badge status-error';
-                    errorBlock.style.display = 'block';
-                    return;
-                }
-
-                fetch(queryUrl)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            badge.textContent = txtRunning;
-                            badge.className = 'status-badge status-ok';
-                            errorBlock.style.display = 'none';
-                        } else {
-                            badge.textContent = txtError;
-                            badge.className = 'status-badge status-error';
-                            errorBlock.style.display = 'block'; 
-                        }
+            for (let offset = 0; offset < ids.length; offset += 5) {
+                const chunk = ids.slice(offset, offset + 5);
+                fetch(`index.php?action=status&ids=${encodeURIComponent(chunk.join(','))}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error('health request failed');
+                        return response.json();
                     })
-                    .catch(() => {
-                        badge.textContent = txtError;
-                        badge.className = 'status-badge status-error';
-                        errorBlock.style.display = 'block';
-                    });
-            });
+                    .then(data => {
+                        chunk.forEach(id => renderHealth(cardMap.get(id), data.results?.[id]?.status === 'ok'));
+                    })
+                    .catch(() => chunk.forEach(id => renderHealth(cardMap.get(id), false)));
+            }
         <?php if ($isAuthenticated): ?>
         // 4. Drag & Drop nativo para reordenar cards no dashboard
         let draggedCard = null;

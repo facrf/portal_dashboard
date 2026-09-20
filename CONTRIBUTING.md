@@ -42,16 +42,25 @@ Use mensagens de commit claras, curtas e objetivas, no formato:
 
 📁 Organização do projeto
 
-    index.html — página principal
-    Arquivos devem permanecer simples e legíveis
-    Evite código, estilos ou textos não utilizados
-    HTML puro, sem dependências desnecessárias
+    index.php — portal público e monitoramento
+    admin.php / config.php — áreas administrativas
+    db.php — conexão, schema, migrações e sessão
+    helpers.php — validação compartilhada
+    tests/run.php — testes rápidos sem dependências externas
+    Arquivos devem permanecer simples, legíveis e sem código não utilizado
 
 🌍 Traduções (i18n)
 
     Textos traduzidos devem manter o mesmo significado do original
     Preserve consistência entre idiomas
     Evite traduções parciais sem contexto
+
+🧪 Testes
+
+    Antes de enviar uma alteração, execute:
+
+    docker build -t portal-dashboard:test .
+    docker run --rm portal-dashboard:test php tests/run.php
 
 🚫 O que evitar
 

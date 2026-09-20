@@ -597,6 +597,12 @@ tr:hover td {
 
 /* Theme Toggle Switch */
 .theme-toggle-wrapper {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font: inherit;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -608,6 +614,12 @@ tr:hover td {
 
 .theme-toggle-wrapper:hover {
     opacity: 1;
+}
+
+.theme-toggle-wrapper:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 4px;
+    border-radius: 6px;
 }
 
 .theme-toggle-wrapper svg {

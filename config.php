@@ -13,11 +13,12 @@ require_once 'db.php';
 // PROCESSAMENTO DE FORMULÁRIOS (POST)
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    
-    // PROTEÇÃO CSRF GLOBAL DO CONFIG.PHP
-    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die("Ação bloqueada: Token CSRF inválido.");
+    try {
+        requireCsrfToken($_POST);
+    } catch (InvalidArgumentException $e) {
+        die(htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
     }
+    try {
 
     // ==========================================
     // EXPORTAÇÃO SEGURA VIA POST
@@ -49,6 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 die("Não foi possível ler o arquivo de importação.");
             }
             $ext = strtolower(pathinfo($_FILES['import_file']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['json', 'yaml', 'yml'], true)) {
+                throw new InvalidArgumentException('Formato não suportado. Envie JSON, YAML ou YML.');
+            }
 
             if ($ext === 'json') {
                 $json = json_decode($fileContent, true);
@@ -65,28 +69,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             die("O backup excede o limite de 500 categorias ou 5.000 serviços.");
                         }
                         try {
+                            // Valida e normaliza tudo antes de remover qualquer dado atual.
+                            $normalizedCategories = [];
+                            foreach ($json['categories'] as $index => $category) {
+                                if (!is_array($category)) throw new InvalidArgumentException('Categoria inválida no backup.');
+                                $normalizedCategories[] = [
+                                    'old_id' => (string) ($category['id'] ?? "category-{$index}"),
+                                    'name' => inputString($category, 'name', 120, true),
+                                    'sort_order' => max(0, min(499, (int) ($category['sort_order'] ?? $index)))
+                                ];
+                            }
+                            if ($normalizedCategories === []) {
+                                $normalizedCategories[] = ['old_id' => '__fallback__', 'name' => 'Geral', 'sort_order' => 0];
+                            }
+
+                            $normalizedTools = [];
+                            foreach ($json['tools'] as $index => $tool) {
+                                if (!is_array($tool)) throw new InvalidArgumentException('Serviço inválido no backup.');
+                                $normalizedTools[] = [
+                                    'category_id' => (string) ($tool['category_id'] ?? '__fallback__'),
+                                    'name' => inputString($tool, 'name', 120, true),
+                                    'url' => validatedToolUrl(inputString($tool, 'url', 2048, true)),
+                                    'icon_url' => validatedIconReference(inputString($tool, 'icon_url', 2048)),
+                                    'description' => inputString($tool, 'description', 500),
+                                    'sort_order' => max(0, min(4999, (int) ($tool['sort_order'] ?? $index))),
+                                    'tag_name' => inputString($tool, 'tag_name', 30),
+                                    'tag_color' => validatedColor((string) ($tool['tag_color'] ?? '#007bff'))
+                                ];
+                            }
+
                             $pdo->beginTransaction();
 
+                            $pdo->exec("DELETE FROM health_cache");
                             $pdo->exec("DELETE FROM tools");
                             $pdo->exec("DELETE FROM categories");
                             
-                            $catMap = []; 
-                            foreach ($json['categories'] as $c) {
-                                $name = $c['name'] ?? 'Categoria Recuperada';
-                                $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
-                                $stmt->execute([$name]);
-                                $catMap[$c['id'] ?? 0] = $pdo->lastInsertId();
+                            $catMap = [];
+                            $insertCategory = $pdo->prepare("INSERT INTO categories (name, sort_order) VALUES (?, ?)");
+                            foreach ($normalizedCategories as $category) {
+                                $insertCategory->execute([$category['name'], $category['sort_order']]);
+                                $catMap[$category['old_id']] = (int) $pdo->lastInsertId();
                             }
+                            $fallbackCatId = reset($catMap);
                             
-                            foreach ($json['tools'] as $t) {
-                                $newCatId = $catMap[$t['category_id'] ?? null] ?? 1;
-                                $name = $t['name'] ?? 'Serviço Recuperado';
-                                $url = $t['url'] ?? '';
-                                $icon = $t['icon_url'] ?? '';
-                                $desc = $t['description'] ?? '';
-
-                                $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                                $stmt->execute([$name, $url, $icon, $desc, $newCatId]);
+                            $insertTool = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id, sort_order, tag_name, tag_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                            foreach ($normalizedTools as $tool) {
+                                $newCatId = $catMap[$tool['category_id']] ?? $fallbackCatId;
+                                $insertTool->execute([
+                                    $tool['name'], $tool['url'], $tool['icon_url'], $tool['description'],
+                                    $newCatId, $tool['sort_order'], $tool['tag_name'], $tool['tag_color']
+                                ]);
                             }
                             
                             if (isset($json['settings']) && is_array($json['settings'])) {
@@ -98,28 +130,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                 $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, footer_text=?, session_days=?, brute_max_attempts=?, brute_lockout_time=?, show_clock=?, show_greeting=?, greeting_name=? WHERE id=1");
                                 $stmt->execute([
-                                    $s['portal_name'] ?? 'Meu Portal', 
-                                    $s['favicon'] ?? '', 
-                                    $s['bg_color'] ?? '#000000', 
-                                    $s['bg_image'] ?? '', 
-                                    $s['text_color'] ?? '#ffffff', 
+                                    inputString($s, 'portal_name', 120) ?: 'Meu Portal',
+                                    validatedIconReference(inputString($s, 'favicon', 2048)),
+                                    validatedColor((string) ($s['bg_color'] ?? '#000000'), '#000000'),
+                                    validatedIconReference(inputString($s, 'bg_image', 2048)),
+                                    validatedColor((string) ($s['text_color'] ?? '#ffffff'), '#ffffff'),
                                     $importLang, 
-                                    $footer,
+                                    is_string($footer) ? mb_substr($footer, 0, 5000, 'UTF-8') : '',
                                     max(1, min(365, (int)($s['session_days'] ?? 7))),
                                     max(1, min(50, (int)($s['brute_max_attempts'] ?? 5))),
                                     max(1, min(86400, (int)($s['brute_lockout_time'] ?? 900))),
                                     isset($s['show_clock']) ? (int)$s['show_clock'] : 1,
                                     isset($s['show_greeting']) ? (int)$s['show_greeting'] : 1,
-                                    $s['greeting_name'] ?? 'Administrador'
+                                    inputString($s, 'greeting_name', 80) ?: 'Administrador'
                                 ]);
                             }
 
                             $pdo->commit();
 
-                        } catch (Exception $e) {
-                            $pdo->rollBack();
+                        } catch (Throwable $e) {
+                            if ($pdo->inTransaction()) $pdo->rollBack();
+                            http_response_code(422);
                             die("Erro na importação. O banco de dados foi preservado. Detalhe: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
                         }
+                    } else {
+                        http_response_code(422);
+                        die('Backup nativo incompleto.');
                     }
                 } 
                 // 2. IMPORTAÇÃO DO HEIMDALL (Detecta e Anexa dados)
@@ -131,20 +167,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             http_response_code(413);
                             die("A importação excede o limite de 5.000 serviços.");
                         }
-                        $pdo->exec("INSERT INTO categories (name) VALUES ('Importado: Heimdall')");
-                        $catId = $pdo->lastInsertId();
-                        
-                        foreach ($items as $item) {
-                            if (!is_array($item)) continue;
-                            $name = $item['title'] ?? $item['name'] ?? 'App';
-                            $url = $item['url'] ?? '';
-                            $icon = $item['icon'] ?? '';
-                            $desc = $item['description'] ?? '';
-                            
-                            if (!empty($url) || !empty($name)) {
-                                $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
+                        try {
+                            $pdo->beginTransaction();
+                            $pdo->exec("INSERT INTO categories (name) VALUES ('Importado: Heimdall')");
+                            $catId = (int) $pdo->lastInsertId();
+                            $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
+                            foreach ($items as $item) {
+                                if (!is_array($item)) continue;
+                                $nameValue = $item['title'] ?? $item['name'] ?? 'App';
+                                $item['name'] = is_string($nameValue) ? $nameValue : 'App';
+                                if (!is_string($item['url'] ?? null) || trim($item['url']) === '') continue;
+                                $name = inputString($item, 'name', 120, true);
+                                $url = validatedToolUrl(inputString($item, 'url', 2048, true));
+                                $item['icon_url'] = is_string($item['icon'] ?? null) ? $item['icon'] : '';
+                                $icon = validatedIconReference(inputString($item, 'icon_url', 2048));
+                                $desc = inputString($item, 'description', 500);
                                 $stmt->execute([$name, $url, $icon, $desc, $catId]);
                             }
+                            $pdo->commit();
+                        } catch (Throwable $e) {
+                            if ($pdo->inTransaction()) $pdo->rollBack();
+                            http_response_code(422);
+                            die('Falha ao importar dados do Heimdall: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
                         }
                     }
                 }
@@ -156,9 +200,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     http_response_code(413);
                     die("O arquivo YAML excede o limite de 20.000 linhas.");
                 }
-                $currentCatId = 1;
-                $currentApp = null;
-                $currentAppProps = [];
+                $pdo->beginTransaction();
+                try {
+                    $fallbackCategory = $pdo->query("SELECT id FROM categories ORDER BY id LIMIT 1")->fetchColumn();
+                    if (!$fallbackCategory) {
+                        $pdo->exec("INSERT INTO categories (name) VALUES ('Geral')");
+                        $fallbackCategory = $pdo->lastInsertId();
+                    }
+                    $currentCatId = (int) $fallbackCategory;
+                    $currentApp = null;
+                    $currentAppProps = [];
 
                 foreach ($lines as $line) {
                     if (trim($line) === '' || str_starts_with(trim($line), '#')) continue;
@@ -170,7 +221,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (preg_match('/^-\s+(.+?):$/', $content, $m)) {
                         if ($currentApp) {
                             $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                            $stmt->execute([$currentApp, $currentAppProps['href'] ?? '', $currentAppProps['icon'] ?? '', $currentAppProps['description'] ?? '', $currentCatId]);
+                            if (!empty($currentAppProps['href'])) {
+                                $stmt->execute([
+                                    mb_substr($currentApp, 0, 120, 'UTF-8'),
+                                    validatedToolUrl(mb_substr($currentAppProps['href'], 0, 2048, 'UTF-8')),
+                                    validatedIconReference(mb_substr($currentAppProps['icon'] ?? '', 0, 2048, 'UTF-8')),
+                                    mb_substr($currentAppProps['description'] ?? '', 0, 500, 'UTF-8'),
+                                    $currentCatId
+                                ]);
+                            }
                             $currentApp = null;
                             $currentAppProps = [];
                         }
@@ -179,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         if ($indent === 0) {
                             $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)");
-                            $stmt->execute([$catOrAppName . ' (Homepage)']);
+                            $stmt->execute([mb_substr($catOrAppName . ' (Homepage)', 0, 120, 'UTF-8')]);
                             $currentCatId = $pdo->lastInsertId();
                         } else {
                             $currentApp = $catOrAppName;
@@ -192,12 +251,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 if ($currentApp) {
-                    $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->execute([$currentApp, $currentAppProps['href'] ?? '', $currentAppProps['icon'] ?? '', $currentAppProps['description'] ?? '', $currentCatId]);
+                    if (!empty($currentAppProps['href'])) {
+                        $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id) VALUES (?, ?, ?, ?, ?)");
+                        $stmt->execute([
+                            mb_substr($currentApp, 0, 120, 'UTF-8'),
+                            validatedToolUrl(mb_substr($currentAppProps['href'], 0, 2048, 'UTF-8')),
+                            validatedIconReference(mb_substr($currentAppProps['icon'] ?? '', 0, 2048, 'UTF-8')),
+                            mb_substr($currentAppProps['description'] ?? '', 0, 500, 'UTF-8'),
+                            $currentCatId
+                        ]);
+                    }
+                }
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    throw $e;
                 }
             }
             header("Location: config.php?import_success=1"); 
             exit;
+        } else {
+            throw new InvalidArgumentException('Nenhum arquivo válido foi enviado para importação.');
         }
     }
 
@@ -205,26 +279,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
         
         $allowedLangs = ['pt', 'es', 'en'];
-        $lang = in_array($_POST['language'], $allowedLangs) ? $_POST['language'] : 'pt';
+        $langInput = inputString($_POST, 'language', 2);
+        $lang = in_array($langInput, $allowedLangs, true) ? $langInput : 'pt';
         $showClock = isset($_POST['show_clock']) ? 1 : 0;
         $showGreeting = isset($_POST['show_greeting']) ? 1 : 0;
-        $greetingName = trim($_POST['greeting_name']) ?: 'Administrador';
+        $greetingName = inputString($_POST, 'greeting_name', 80) ?: 'Administrador';
+        $portalName = inputString($_POST, 'portal_name', 120, true);
+        $favicon = validatedIconReference(inputString($_POST, 'favicon', 2048));
+        $bgColor = validatedColor(inputString($_POST, 'bg_color', 7), '#000000');
+        $bgImage = validatedIconReference(inputString($_POST, 'bg_image', 2048));
+        $textColor = validatedColor(inputString($_POST, 'text_color', 7), '#ffffff');
 
         $stmt = $pdo->prepare("UPDATE settings SET portal_name=?, favicon=?, bg_color=?, bg_image=?, text_color=?, language=?, show_clock=?, show_greeting=?, greeting_name=? WHERE id=1");
-        $stmt->execute([$_POST['portal_name'], $_POST['favicon'], $_POST['bg_color'], $_POST['bg_image'], $_POST['text_color'], $lang, $showClock, $showGreeting, $greetingName]);
+        $stmt->execute([$portalName, $favicon, $bgColor, $bgImage, $textColor, $lang, $showClock, $showGreeting, $greetingName]);
         
         header("Location: config.php?success=1"); exit;
     }
     
     // Salvar Configurações de Segurança e Acesso
     if (isset($_POST['action']) && $_POST['action'] === 'update_security') {
-        $sessionDays = (int) $_POST['session_days'];
-        $maxAttempts = (int) $_POST['brute_max_attempts'];
-        $lockoutTime = (int) $_POST['brute_lockout_time'];
-        
-        $sessionDays = max(1, min(365, $sessionDays));
-        $maxAttempts = max(1, min(50, $maxAttempts));
-        $lockoutTime = max(1, min(86400, $lockoutTime));
+        $sessionDays = inputInt($_POST, 'session_days', 1, 365, 7);
+        $maxAttempts = inputInt($_POST, 'brute_max_attempts', 1, 50, 5);
+        $lockoutTime = inputInt($_POST, 'brute_lockout_time', 1, 86400, 900);
 
         $stmt = $pdo->prepare("UPDATE settings SET session_days=?, brute_max_attempts=?, brute_lockout_time=? WHERE id=1");
         $stmt->execute([$sessionDays, $maxAttempts, $lockoutTime]);
@@ -234,15 +310,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Ações de Categoria
     if (isset($_POST['action']) && $_POST['action'] === 'add_category') {
-        $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)"); $stmt->execute([$_POST['cat_name']]); header("Location: config.php"); exit;
+        $stmt = $pdo->prepare("INSERT INTO categories (name) VALUES (?)"); $stmt->execute([inputString($_POST, 'cat_name', 120, true)]); header("Location: config.php"); exit;
     }
     if (isset($_POST['action']) && $_POST['action'] === 'edit_category') {
-        $stmt = $pdo->prepare("UPDATE categories SET name = ? WHERE id = ?"); $stmt->execute([$_POST['cat_name'], $_POST['cat_id']]); header("Location: config.php"); exit;
+        $stmt = $pdo->prepare("UPDATE categories SET name = ? WHERE id = ?"); $stmt->execute([inputString($_POST, 'cat_name', 120, true), inputId($_POST, 'cat_id')]); header("Location: config.php"); exit;
     }
     
     // Excluir Categoria (COM CORREÇÃO SQL INJECTION)
     if (isset($_POST['action']) && $_POST['action'] === 'delete_category') {
-        $catId = $_POST['cat_id'];
+        $catId = inputId($_POST, 'cat_id');
         
         $stmtFallback = $pdo->prepare("SELECT id FROM categories WHERE id != ? LIMIT 1");
         $stmtFallback->execute([$catId]);
@@ -262,30 +338,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // AJAX Reorder Categories
     if (isset($_POST['action']) && $_POST['action'] === 'reorder_categories' && isset($_POST['orders'])) {
-        $orders = json_decode($_POST['orders'], true);
-        if (is_array($orders)) {
+        $orders = json_decode(inputString($_POST, 'orders', 20000, true), true);
+        if (is_array($orders) && count($orders) <= 500) {
             $pdo->beginTransaction();
             foreach ($orders as $order) {
+                if (!is_array($order)) continue;
+                $id = filter_var($order['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                $position = filter_var($order['order'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 499]]);
+                if ($id === false || $position === false) continue;
                 $stmt = $pdo->prepare("UPDATE categories SET sort_order = ? WHERE id = ?");
-                $stmt->execute([$order['order'], $order['id']]);
+                $stmt->execute([(int) $position, (int) $id]);
             }
             $pdo->commit();
-            echo json_encode(['status' => 'ok']);
+            jsonResponse(['status' => 'ok']);
         }
-        exit;
+        jsonResponse(['status' => 'error', 'msg' => 'Ordenação inválida.'], 422);
+    }
+    } catch (InvalidArgumentException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        http_response_code(422);
+        die(htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
     }
 }
 
 $editCatMode = false; $editCat = null;
-if (isset($_GET['edit_cat'])) {
-    $stmt = $pdo->prepare("SELECT * FROM categories WHERE id = ?"); $stmt->execute([$_GET['edit_cat']]); $editCat = $stmt->fetch(); if ($editCat) $editCatMode = true;
+if (filter_var($_GET['edit_cat'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) !== false) {
+    $stmt = $pdo->prepare("SELECT * FROM categories WHERE id = ?"); $stmt->execute([(int) $_GET['edit_cat']]); $editCat = $stmt->fetch(); if ($editCat) $editCatMode = true;
 }
 
 $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")->fetchAll();
 
-$bgColorValue = !empty($settings['bg_color']) ? htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') : '#000000';
-$textColorValue = !empty($settings['text_color']) ? htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') : '#ffffff';
+$bgColorValue = validatedColor((string) ($settings['bg_color'] ?? ''), '#000000');
+$textColorValue = validatedColor((string) ($settings['text_color'] ?? ''), '#ffffff');
 $currentLang = $settings['language'] ?? 'pt';
 ?>
 <!DOCTYPE html>
@@ -293,6 +378,7 @@ $currentLang = $settings['language'] ?? 'pt';
 <head>
     <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= t('appearance_tabs') ?></title>
     
     <!-- INÍCIO DO FAVICON -->
@@ -301,7 +387,7 @@ $currentLang = $settings['language'] ?? 'pt';
     <?php endif; ?>
     <!-- FIM DO FAVICON -->
 
-    <link rel="stylesheet" href="style.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
     <style>:root { --bg-color: <?= $bgColorValue ?>; --bg-image: url('<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>'); --text-color: <?= $textColorValue ?>; }</style>
 </head>
 <body>
@@ -316,11 +402,11 @@ $currentLang = $settings['language'] ?? 'pt';
         <header>
             <h1><?= t('appearance_tabs') ?></h1>
             <div class="header-controls">
-                <div class="theme-toggle-wrapper" onclick="toggleTheme()" title="Modo Claro/Escuro">
+                <button type="button" class="theme-toggle-wrapper" onclick="toggleTheme()" title="Modo Claro/Escuro" aria-label="Modo Claro/Escuro">
                     <svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm9-4h-2c-.55 0-1 .45-1 1s.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1zM4 12c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1zm7-9V1c0-.55-.45-1-1-1s-1 .45-1 1v2c0 .55.45 1 1 1s1-.45 1-1zm0 18v2c0 .55-.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zm7.66-13.88l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zM4.93 19.07l1.41-1.41c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.41 1.41c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0zm14.14 0c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.41-1.41c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.41zM6.34 6.34c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L6.34 3.51c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.41 1.42z"/></svg>
                     <div class="toggle-slot"><div class="toggle-button"></div></div>
                     <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4C12.92 3.04 12.46 3 12 3z"/></svg>
-                </div>
+                </button>
                 <div class="header-nav">
                     <a href="index.php" class="btn">← <?= t('dashboard') ?></a>
                     <a href="admin.php" class="btn"><?= t('manage_services') ?></a>
@@ -348,7 +434,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 
                 <div class="form-group">
                     <label><?= t('portal_name') ?>:</label>
-                    <input type="text" name="portal_name" value="<?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?>" required>
+                    <input type="text" name="portal_name" maxlength="120" value="<?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?>" required>
                 </div>
                 
                 <div class="form-group">
@@ -362,7 +448,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 
                 <div class="form-group">
                     <label>Favicon (<?= t('Ícone do Navegador - /icons ou URL') ?>):</label>
-                    <input type="text" name="favicon" value="<?= htmlspecialchars($settings['favicon'], ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="text" name="favicon" maxlength="2048" value="<?= htmlspecialchars($settings['favicon'], ENT_QUOTES, 'UTF-8') ?>">
                 </div>
 
                 <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1rem;">
@@ -379,7 +465,7 @@ $currentLang = $settings['language'] ?? 'pt';
 
                 <div class="form-group">
                     <label><?= t('URL / Nome Imagem de Fundo') ?>:</label>
-                    <input type="text" name="bg_image" value="<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="text" name="bg_image" maxlength="2048" value="<?= htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') ?>">
                 </div>
                 
                 <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 15px;">
@@ -394,7 +480,7 @@ $currentLang = $settings['language'] ?? 'pt';
 
                 <div class="form-group" style="margin-top: 15px;">
                     <label><?= t('Nome para a Saudação') ?>:</label>
-                    <input type="text" name="greeting_name" value="<?= htmlspecialchars($settings['greeting_name'] ?? 'Administrador', ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="text" name="greeting_name" maxlength="80" value="<?= htmlspecialchars($settings['greeting_name'] ?? 'Administrador', ENT_QUOTES, 'UTF-8') ?>">
                 </div>
                 
                 <button type="submit" class="btn"><?= t('save_changes') ?></button>
@@ -476,7 +562,7 @@ $currentLang = $settings['language'] ?? 'pt';
                 
                 <div class="form-group" style="flex:1; margin-bottom:0;">
                     <label><?= $editCatMode ? t('Editar Nome da Categoria') . ':' : t('Nova Categoria') . ':' ?></label>
-                    <input type="text" name="cat_name" value="<?= $editCatMode ? htmlspecialchars($editCat['name'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
+                    <input type="text" name="cat_name" maxlength="120" value="<?= $editCatMode ? htmlspecialchars($editCat['name'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
                 <button type="submit" class="btn"><?= $editCatMode ? t('save_changes') : t('Adicionar') ?></button>
                 <?php if ($editCatMode): ?><a href="config.php" class="btn"><?= t('Cancelar') ?></a><?php endif; ?>
@@ -491,6 +577,8 @@ $currentLang = $settings['language'] ?? 'pt';
                                 <td style="font-weight: bold;"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td>
                                     <div class="action-buttons">
+                                        <button type="button" class="btn move-category" data-direction="up" aria-label="Mover categoria para cima" title="Mover para cima" style="padding:0.3rem 0.6rem">↑</button>
+                                        <button type="button" class="btn move-category" data-direction="down" aria-label="Mover categoria para baixo" title="Mover para baixo" style="padding:0.3rem 0.6rem">↓</button>
                                         <a href="config.php?edit_cat=<?= $cat['id'] ?>#cat-panel" class="btn" style="padding:0.3rem 0.6rem; font-size:0.8rem"><?= t('edit') ?></a>
                                         <form method="POST" style="margin:0;">
                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
@@ -528,6 +616,17 @@ $currentLang = $settings['language'] ?? 'pt';
             const tbody = document.getElementById('categories-tbody');
             
             if (tbody) {
+                tbody.querySelectorAll('.move-category').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const row = button.closest('tr');
+                        const target = button.dataset.direction === 'up' ? row.previousElementSibling : row.nextElementSibling;
+                        if (!target) return;
+                        if (button.dataset.direction === 'up') tbody.insertBefore(row, target);
+                        else tbody.insertBefore(target, row);
+                        saveCategoryOrder();
+                    });
+                });
+
                 tbody.querySelectorAll('tr.draggable-row').forEach(row => {
                     row.addEventListener('dragstart', function(e) {
                         draggedRow = this;

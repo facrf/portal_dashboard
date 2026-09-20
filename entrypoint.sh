@@ -1,19 +1,14 @@
 #!/bin/sh
 set -e
 
-# 1. Se a pasta de ícones mapeada pelo usuário estiver vazia,
-# copia os ícones padrão de volta para ela para não quebrar o layout
-if [ -z "$(ls -A /var/www/html/icons 2>/dev/null)" ]; then
-    echo "Pasta de ícones vazia. Copiando ícones padrão..."
-    cp -R /var/www/html/icons_default/. /var/www/html/icons/ 2>/dev/null || true
-fi
+# Cria os diretórios persistentes. A imagem não embute a coleção opcional de
+# ícones: use URLs nos serviços ou monte sua própria pasta em /var/www/html/icons.
+PORTAL_DB_PATH="${PORTAL_DB_PATH:-/var/www/db_data/bd.db}"
+PORTAL_DB_DIR="$(dirname "$PORTAL_DB_PATH")"
+mkdir -p "$PORTAL_DB_DIR" /var/www/html/icons
 
-# 2. Cria a nova pasta do banco caso o mapeamento do Docker não a crie a tempo
-mkdir -p /var/www/db_data
-
-# 3. Garante permissões corretas para o Apache (www-data)
-# na nova pasta segura do banco e na pasta de ícones
-chown -R www-data:www-data /var/www/db_data
+# Garante permissões para o processo PHP-FPM (www-data).
+chown -R www-data:www-data "$PORTAL_DB_DIR"
 chown -R www-data:www-data /var/www/html/icons
 
 exec "$@"

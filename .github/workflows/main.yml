@@ -8,17 +8,6 @@ on:
       - 'LICENSE'         # Ignora alterações no arquivo de licença
       - '.gitignore'      # Ignora o arquivo do git
       - 'icons/**'        # Ignora tudo o que estiver dentro da pasta icons
-      - 'database/**'     # Ignora tudo o que estiver dentro da pasta database
-      - 'lang/**'         # Ignora tudo o que estiver dentro da pasta lang
-      # --- NOVOS FILTROS DE MÍDIA E DOCUMENTOS ---
-      - '**/*.png'        # Ignora arquivos PNG em qualquer pasta do projeto
-      - '**/*.jpg'        # Ignora arquivos JPG em qualquer pasta do projeto
-      - '**/*.jpeg'       # Ignora arquivos JPEG em qualquer pasta do projeto
-      - '**/*.ico'        # Ignora arquivos de ícone ICO em qualquer pasta
-      - '**/*.txt'        # Ignora arquivos de texto (.txt) como notas de desenvolvimento
-      # --- CUIDADO COM ESTES DOIS (LEIA OS AVISOS ABAIXO) ---
-      - '**/*.json'       # Ignora arquivos JSON de configuração
-      - '**/*.html'       # Ignora arquivos HTML puros
   release:
     types: [published] # Dispara quando criar uma nova Release/Tag
 
@@ -27,7 +16,20 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Build test image
+        run: docker build -t portal-dashboard:test .
+      - name: Run PHP checks
+        run: docker run --rm portal-dashboard:test php tests/run.php
+
   build-and-push:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,6 +64,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=semver,pattern={{version}}
+            type=sha
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -70,6 +73,7 @@ jobs:
           push: true
           # 3. A Mágica Acontece Aqui: Definindo as arquiteturas
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/riscv64
-          tags: ${{ steps.meta.outputs.tags }}      # corrigido
-          labels: ${{ steps.meta.outputs.labels }}  # corrigido
-
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -57,10 +57,12 @@ You can run Portal Dashboard directly on your preferred web server or via Docker
    ```
 
 3. **Configure Permissions:**
-   Make sure the web server user (e.g., `www-data`) has read and write permissions in the project folder to manipulate the SQLite database:
+   The local database is stored at `db_data/bd.db`. Grant write access only to that directory:
    ```bash
-   sudo chown -R www-data:www-data /path/to/portal_dashboard
+   mkdir -p /path/to/portal_dashboard/db_data
+   sudo chown -R www-data:www-data /path/to/portal_dashboard/db_data
    ```
+   Set `PORTAL_DB_PATH` to a full file path if you want to store it elsewhere.
 
 4. **Access in Browser:**
    Access `http://localhost/portal_dashboard` (or your server's IP).
@@ -100,6 +102,8 @@ If the portal is behind a reverse proxy, configure only that proxy's IP (or narr
 
 Separate multiple proxies with commas. Do not use all private ranges (`10.0.0.0/8`, `172.16.0.0/12`, or `192.168.0.0/16`); prefer the fixed IP of Nginx Proxy Manager, Traefik, or Cloudflare Tunnel. The proxy must overwrite or correctly append `X-Forwarded-For` and `X-Forwarded-Proto`. Leave this variable unset for direct access.
 
+The image does not bundle third-party icons. Mount your own directory at `/var/www/html/icons`, use a file name from that volume, or enter an icon URL.
+
 ---
 
 ## ⚙️ Customization
@@ -111,11 +115,22 @@ You can:
 * Group services by categories (e.g., Media, Monitoring, Network).
 * Define internal links (for local use) and external links (via tunnels/reverse proxy) for the same service.
 
+Service health is checked in batches and cached for 45 seconds.
+
+To run the same validation used by CI:
+
+```bash
+docker build -t portal-dashboard:test .
+docker run --rm portal-dashboard:test php tests/run.php
+```
+
 ---
 
 ## 📄 License
 
 This project is licensed under the GNU GPL v3 license. This means you are free to use, modify, and distribute the software, as long as you keep the changes under the same open-source license. See the LICENSE file for more details.
+
+See the [changelog](CHANGELOG.md) for upgrade and migration details.
 
 ---
 

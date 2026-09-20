@@ -1,35 +1,37 @@
-# Usamos a imagem Alpine com PHP-FPM (extremamente leve)[cite: 1]
+# Imagem Alpine com PHP-FPM.
 FROM php:8.3-fpm-alpine
 
-# Instala o Nginx, Supervisor e as bibliotecas do SQLite[cite: 1]
+ENV PORTAL_DB_PATH=/var/www/db_data/bd.db
+
+# Instala Nginx, Supervisor e SQLite.
 RUN apk add --no-cache nginx supervisor sqlite-dev ca-certificates && \
     docker-php-ext-install pdo pdo_sqlite
 
-# Copia as configurações do Nginx e do Supervisor para dentro do Linux[cite: 1]
+# Configura os processos da imagem.
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY supervisord.conf /etc/supervisord.conf
+COPY php-security.ini /usr/local/etc/php/conf.d/zz-portal-security.ini
 
-# Copia os arquivos do projeto[cite: 1]
+# Copia os arquivos do projeto.
 # Por padrão, estes arquivos pertencerão ao root:root
 COPY . /var/www/html/
 WORKDIR /var/www/html/
 
-# Backup dos ícones (para o nosso entrypoint inteligente)[cite: 1]
-RUN mkdir -p /var/www/html/icons_default && \
-    cp -R /var/www/html/icons/. /var/www/html/icons_default/ 2>/dev/null || true
-
-# Cria pastas necessárias (sem dar chown global!)[cite: 1]
+# Cria as pastas persistentes.
 RUN mkdir -p /var/www/db_data /var/www/html/icons
 
-# Copia e dá permissão ao Entrypoint[cite: 1]
+# Instala o entrypoint.
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Expõe a porta 80[cite: 1]
+# Expõe a porta HTTP.
 EXPOSE 80
 
-# Define o entrypoint[cite: 1]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+
+# Define o entrypoint.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# O comando final agora não é mais o Apache, e sim o Supervisor!
+# Inicia Nginx e PHP-FPM pelo Supervisor.
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

@@ -57,10 +57,13 @@ Você pode rodar o Portal Dashboard diretamente no seu servidor web de preferên
    ```
 
 3. **Configurar Permissões:**
-   Certifique-se de que o usuário do servidor web (ex: `www-data`) tenha permissão de leitura e escrita na pasta do projeto para manipular o banco de dados SQLite:
+   O banco local fica em `db_data/bd.db`. Dê acesso de escrita somente a esse diretório:
    ```bash
-   sudo chown -R www-data:www-data /caminho/para/portal_dashboard
+   mkdir -p /caminho/para/portal_dashboard/db_data
+   sudo chown -R www-data:www-data /caminho/para/portal_dashboard/db_data
    ```
+
+   Para armazená-lo em outro local, defina `PORTAL_DB_PATH` com o caminho completo do arquivo.
 
 4. **Acessar no Navegador:**
    Acesse `http://localhost/portal_dashboard` (ou o IP do seu servidor).
@@ -91,6 +94,11 @@ services:
     restart: unless-stopped
 ```
 
+A imagem não inclui uma coleção de ícones de terceiros. Monte sua própria pasta em
+`/var/www/html/icons`, use o nome de um arquivo desse volume ou informe uma URL no
+cadastro do serviço. Isso mantém a imagem pequena, reproduzível e sem downloads em
+tempo de execução.
+
 Se o portal estiver atrás de um proxy reverso, configure apenas o IP (ou CIDR restrito) desse proxy como confiável:
 
 ```yaml
@@ -115,11 +123,27 @@ Você pode:
 * Agrupar serviços por categorias (ex: Mídia, Monitoramento, Rede).
 * Definir links internos (para uso local) e externos (via tunnels/reverso) para o mesmo serviço.
 
+O estado dos serviços é consultado em lotes e mantido em cache por 45 segundos para
+evitar que cada visitante gere uma conexão nova por card.
+
+---
+
+## ✅ Validação local
+
+Para executar a mesma validação usada no CI:
+
+```bash
+docker build -t portal-dashboard:test .
+docker run --rm portal-dashboard:test php tests/run.php
+```
+
 ---
 
 ## 📄 Licença
 
 Este projeto está sob a licença GNU GPL v3. Isso significa que você é livre para usar, modificar e distribuir o software, desde que mantenha as alterações sob a mesma licença de código aberto. Veja o arquivo LICENSE para mais detalhes.
+
+Consulte também o [changelog](CHANGELOG.md) para detalhes de atualização e migração.
 
 ---
 

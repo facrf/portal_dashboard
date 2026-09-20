@@ -16,9 +16,16 @@ if (!in_array($next, ['admin.php', 'config.php'], true)) {
 
 // 1. PRIMEIRO: Verifica a requisição de Logout (Agora via POST e com proteção CSRF)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'logout') {
-    if (!empty($_POST['csrf_token']) && hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {
+    $logoutToken = $_POST['csrf_token'] ?? null;
+    if (is_string($logoutToken) && hash_equals($_SESSION['csrf_token'] ?? '', $logoutToken)) {
         session_destroy();
-        setcookie(session_name(), '', time() - 3600, '/');
+        setcookie(session_name(), '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $isSecure,
+            'httponly' => true,
+            'samesite' => 'Strict'
+        ]);
         header("Location: index.php");
         exit;
     } else {
@@ -44,6 +51,8 @@ $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $ip = getClientIp();
 $maxAttempts = (int)($settings['brute_max_attempts'] ?? 5);
 $lockoutTime = (int)($settings['brute_lockout_time'] ?? 900);
+$pdo->prepare("DELETE FROM login_attempts WHERE last_attempt < ?")
+    ->execute([time() - max(86400, $lockoutTime * 2)]);
 
 $stmt = $pdo->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip = ?");
 $stmt->execute([$ip]);
@@ -68,11 +77,12 @@ if ($attemptData && $attemptData['attempts'] >= $maxAttempts) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validação CSRF
-    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    $submittedToken = $_POST['csrf_token'] ?? null;
+    if (!is_string($submittedToken) || !hash_equals($_SESSION['csrf_token'], $submittedToken)) {
         $error = "Sessão expirada ou requisição inválida.";
     } else {
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $username = is_string($_POST['username'] ?? null) ? trim($_POST['username']) : '';
+        $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
 
         if ($isFirstAccess) {
             
@@ -95,22 +105,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>");
             }
 
-            if (empty($username) || empty($password)) {
-                $error = "Preencha todos os campos.";
-            } elseif (!preg_match('/^[a-zA-Z0-9_.-]+$/', $username)) {
-                $error = "O usuário deve conter apenas letras, números, traços e underscores.";
-            } elseif (strlen($password) > 72) {
-                $error = "A senha não pode ter mais que 72 caracteres.";
-            } else {
+            try {
+                validateUsername($username);
+                validatePassword($password, true);
                 $hash = password_hash($password, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
                 $stmt->execute([$username, $hash]);
+                $userId = (int) $pdo->lastInsertId();
 
                 session_regenerate_id(true);
                 $_SESSION['logged_in'] = true;
+                $_SESSION['user_id'] = $userId;
                 $_SESSION['username'] = $username;
                 header('Location: ' . $next);
                 exit;
+            } catch (InvalidArgumentException $e) {
+                $error = $e->getMessage();
             }
         } else {
             // Login padrão
@@ -129,17 +139,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true); 
                 
                 $_SESSION['logged_in'] = true;
+                $_SESSION['user_id'] = (int) $user['id'];
                 $_SESSION['username'] = $user['username'];
                 header('Location: ' . $next);
                 exit;
                 
             } else {
                 // Falha no login: Incrementa a tabela de Brute Force
-                if ($attemptData) {
-                    $pdo->prepare("UPDATE login_attempts SET attempts = attempts + 1, last_attempt = ? WHERE ip = ?")->execute([time(), $ip]);
-                } else {
-                    $pdo->prepare("INSERT INTO login_attempts (ip, attempts, last_attempt) VALUES (?, 1, ?)")->execute([$ip, time()]);
-                }
+                $pdo->prepare("INSERT INTO login_attempts (ip, attempts, last_attempt) VALUES (?, 1, ?)
+                    ON CONFLICT(ip) DO UPDATE SET attempts = attempts + 1, last_attempt = excluded.last_attempt")
+                    ->execute([$ip, time()]);
                 
                 // Delay aleatório suave (0.5 a 1s) para mitigar Timing Attacks de varredura
                 usleep(rand(500000, 1000000)); 
@@ -165,12 +174,12 @@ $currentLang = $settings['language'] ?? 'pt';
         <link rel="icon" href="<?= $favicon ?>">
     <?php endif; ?>
 
-    <link rel="stylesheet" href="style.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
     <style>
         :root { 
-            --bg-color: <?= htmlspecialchars($settings['bg_color'], ENT_QUOTES, 'UTF-8') ?>; 
+            --bg-color: <?= validatedColor((string) $settings['bg_color'], '#1e1e2e') ?>;
             --bg-image: <?= !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') . "')" : 'none' ?>; 
-            --text-color: <?= htmlspecialchars($settings['text_color'], ENT_QUOTES, 'UTF-8') ?>; 
+            --text-color: <?= validatedColor((string) $settings['text_color'], '#cdd6f4') ?>;
         }
         .login-container {
             max-width: 400px;
@@ -207,11 +216,11 @@ $currentLang = $settings['language'] ?? 'pt';
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <div class="form-group">
                     <label>Usuário:</label>
-                    <input type="text" name="username" required autofocus autocomplete="username">
+                    <input type="text" name="username" required maxlength="64" autofocus autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label>Senha:</label>
-                    <input type="password" name="password" required autocomplete="<?= $isFirstAccess ? 'new-password' : 'current-password' ?>">
+                    <input type="password" name="password" required minlength="10" maxlength="72" autocomplete="<?= $isFirstAccess ? 'new-password' : 'current-password' ?>">
                 </div>
                 <button type="submit" class="btn btn-glow"><?= $isFirstAccess ? 'Cadastrar e Entrar' : 'Entrar' ?></button>
             </form>

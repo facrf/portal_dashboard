@@ -14,6 +14,11 @@
 *.sqlite3
 db_data
 
+# A coleção local é opcional e muito grande; imagens de CI devem ser determinísticas.
+icons/*
+!icons/.gitkeep
+!icons/.htaccess
+
 # Arquivos sem uso em tempo de execução
 *.md
 LICENSE
