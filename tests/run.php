@@ -3,6 +3,12 @@
  * Testes rápidos sem dependências externas.
  */
 
+function testPhase(string $name): void {
+    if (getenv('PORTAL_TEST_PROGRESS') === '1') {
+        fwrite(STDOUT, '::notice title=PHP test phase::' . php_uname('m') . ' — ' . $name . PHP_EOL);
+    }
+}
+testPhase('database fixture');
 $configuredDbPath = getenv('PORTAL_DB_PATH');
 $testDbDir = $configuredDbPath !== false && $configuredDbPath !== ''
     ? dirname($configuredDbPath)
@@ -32,9 +38,11 @@ $legacy->exec("INSERT INTO categories (name) VALUES ('Legado')");
 $legacy->exec("INSERT INTO tools (name, url, icon_url, description) VALUES ('Legado', 'https://legacy.example', '', '')");
 $legacy = null;
 
+testPhase('database bootstrap and authentication');
 require dirname(__DIR__) . '/db.php';
 require dirname(__DIR__) . '/imports.php';
 
+testPhase('schema and validation');
 $failures = [];
 // QEMU/riscv64 pode bloquear operações de subprocessos da suíte CLI.
 // O CI dessa arquitetura executa os testes diretos e a integração HTTP externa.
@@ -84,6 +92,7 @@ try {
 }
 expect($unsafeUrlRejected, 'URL com protocolo perigoso não foi rejeitada.');
 
+testPhase('translations and templates');
 $referenceKeys = array_keys(include dirname(__DIR__) . '/lang/pt.php');
 foreach (['en', 'es'] as $language) {
     $keys = array_keys(include dirname(__DIR__) . "/lang/{$language}.php");
@@ -98,6 +107,7 @@ foreach (['index.php', 'login.php', 'admin.php', 'config.php'] as $template) {
     expect(str_contains($content, '<!-- Developed with care by FACRF - https://github.com/facrf -->'), "Assinatura ausente em {$template}.");
 }
 
+testPhase('optional process checks');
 if (!$noSubprocesses) {
     foreach (array_merge(glob(dirname(__DIR__) . '/*.php'), glob(__DIR__ . '/*.php'), glob(dirname(__DIR__) . '/templates/*.php'), glob(dirname(__DIR__) . '/lang/*.php')) as $phpFile) {
         $output = [];
@@ -131,6 +141,7 @@ if (!$noSubprocesses) {
 
 }
 
+testPhase('address, session and monitor settings');
 // Redes de bootstrap e proxies devem funcionar também em PHP de 32 bits.
 foreach (['10.1.2.3', '172.16.0.1', '172.31.255.254', '192.168.0.1', '127.0.0.1', '169.254.1.1', '::1', 'fd00::1', 'fe80::1'] as $ip) {
     expect(isLocalOrPrivateIp($ip), 'IP local rejeitado: ' . $ip);
@@ -161,6 +172,7 @@ expect(acceptsHttpCode(302, '200-399') && !acceptsHttpCode(500, '200-399'), 'Có
 expect(acceptsHttpCode(401, '200-299,401,403'), 'Código HTTP explícito não aceito.');
 expect(healthTarget(['url' => 'https://example.test', 'health_url' => 'http://127.0.0.1:8080/health', 'health_method' => 'http'])['port'] === 8080, 'Destino separado de monitoramento ignorado.');
 
+testPhase('YAML and import transactions');
 // YAML real: comentários, dois pontos e texto multilinha.
 $yaml = <<<'YAML'
 - "Grupo: casa":
@@ -203,6 +215,7 @@ $rejected = false;
 try { buildImportPlan(json_encode($nativeData), 'json'); } catch (InvalidArgumentException $e) { $rejected = true; }
 expect($rejected, 'Backup com serviço órfão foi aceito.');
 
+testPhase('sort order and health cache');
 // Ordenação inválida é rejeitada integralmente antes de atualizar o banco.
 $beforeOrder = $pdo->query('SELECT sort_order FROM tools LIMIT 1')->fetchColumn();
 $rejected = false;
@@ -250,6 +263,7 @@ if (!$noSubprocesses) {
 
 }
 
+testPhase('completed assertions');
 if ($failures !== []) {
     fwrite(STDERR, implode(PHP_EOL, $failures) . PHP_EOL);
     exit(1);
