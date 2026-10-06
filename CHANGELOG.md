@@ -17,6 +17,8 @@ Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo
 - Completados textos dos formulários e fluxos novos em português, inglês e espanhol; labels associados aos campos e suporte a movimento reduzido.
 - Busca externa passou a exigir clique explícito no link identificado para DuckDuckGo.
 - Requisitos documentados: PHP 8.1+, pdo_sqlite, mbstring e curl; yaml para Homepage. Docker inclui todas essas extensões e permite ícones somente leitura.
+- YAML 2.3.0 compilado a partir do pacote oficial com SHA-256 fixo, evitando falha do PECL no PHP 8.3/riscv64.
+- A tag latest é atualizada somente após os testes PHP da imagem candidata passarem nas quatro arquiteturas.
 - CI valida pull requests, testes PHP/JavaScript e integração real com Nginx/PHP-FPM antes de publicar amd64, arm64, arm/v7 e riscv64 no GHCR.
 
 ### Atualização desta versão

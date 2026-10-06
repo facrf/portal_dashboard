@@ -69,13 +69,30 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=sha,format=long
-      - name: Publish supported architectures
+      - name: Build candidate for supported architectures
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/riscv64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify PHP runtime on every architecture
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+        run: |
+          for platform in linux/amd64 linux/arm64 linux/arm/v7 linux/riscv64; do
+            docker run --rm --platform "$platform" "$CANDIDATE_IMAGE" php tests/run.php
+          done
+      - name: Publish validated tags
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          PUBLISH_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          tags=()
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then tags+=(--tag "$tag"); fi
+          done <<< "$PUBLISH_TAGS"
+          docker buildx imagetools create "${tags[@]}" "$CANDIDATE_IMAGE"

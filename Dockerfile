@@ -5,11 +5,20 @@ ENV PORTAL_DB_PATH=/var/www/db_data/bd.db
 
 # Instala Nginx, Supervisor e SQLite.
 # A imagem oficial já fornece PDO SQLite, mbstring e curl; compile apenas YAML.
+# Download fora do PECL evita o problema PHP 8.3/riscv64 com operações de rede PEAR.
+ARG YAML_VERSION=2.3.0
+ARG YAML_SHA256=bc8404807a3a4dc896b310af21a7f8063aa238424ff77f27eb6ffa88b5874b8a
 RUN apk add --no-cache nginx supervisor ca-certificates yaml && \
     apk add --no-cache --virtual .build-deps $PHPIZE_DEPS yaml-dev && \
-    pecl install yaml-2.3.0 && docker-php-ext-enable yaml && \
-    apk del .build-deps && \
-    php -r 'foreach (["pdo_sqlite", "mbstring", "curl", "yaml"] as $extension) { if (!extension_loaded($extension)) { throw new RuntimeException("Missing PHP extension: " . $extension); } }'
+    mkdir -p /usr/src/yaml && \
+    curl --fail --show-error --location --retry 3 "https://pecl.php.net/get/yaml-${YAML_VERSION}.tgz" -o /usr/src/yaml/source.tgz && \
+    echo "${YAML_SHA256}  /usr/src/yaml/source.tgz" | sha256sum -c - && \
+    tar -xzf /usr/src/yaml/source.tgz -C /usr/src/yaml --strip-components=1 && \
+    cd /usr/src/yaml && phpize && ./configure --with-yaml && \
+    make -j"$(getconf _NPROCESSORS_ONLN)" && make install && \
+    docker-php-ext-enable yaml && apk del .build-deps && \
+    php -r 'foreach (["pdo_sqlite", "mbstring", "curl", "yaml"] as $extension) { if (!extension_loaded($extension)) { throw new RuntimeException("Missing PHP extension: " . $extension); } }' && \
+    cd / && rm -r /usr/src/yaml
 
 
 # Configura os processos da imagem.
