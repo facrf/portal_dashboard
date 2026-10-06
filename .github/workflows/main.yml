@@ -98,7 +98,15 @@ jobs:
         timeout-minutes: 3
         env:
           CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-        run: docker run --rm --pull always --platform linux/riscv64 "$CANDIDATE_IMAGE" php tests/run.php
+        run: docker run --rm --pull always --platform linux/riscv64 -e PORTAL_TEST_NO_SUBPROCESSES=1 "$CANDIDATE_IMAGE" php tests/run.php
+      - name: HTTP integration (riscv64)
+        timeout-minutes: 3
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+        run: |
+          docker run --rm --pull always -d --platform linux/riscv64 --name portal-riscv-integration -p 127.0.0.1:18081:80 "$CANDIDATE_IMAGE"
+          trap 'docker stop portal-riscv-integration >/dev/null' EXIT
+          python3 tests/integration.py http://127.0.0.1:18081
       - name: Publish validated tags
         env:
           CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}

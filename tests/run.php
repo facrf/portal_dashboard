@@ -36,6 +36,9 @@ require dirname(__DIR__) . '/db.php';
 require dirname(__DIR__) . '/imports.php';
 
 $failures = [];
+// QEMU/riscv64 pode bloquear operações de subprocessos da suíte CLI.
+// O CI dessa arquitetura executa os testes diretos e a integração HTTP externa.
+$noSubprocesses = getenv('PORTAL_TEST_NO_SUBPROCESSES') === '1';
 function expect(bool $condition, string $message): void {
     global $failures;
     if (!$condition) $failures[] = $message;
@@ -95,31 +98,37 @@ foreach (['index.php', 'login.php', 'admin.php', 'config.php'] as $template) {
     expect(str_contains($content, '<!-- Developed with care by FACRF - https://github.com/facrf -->'), "Assinatura ausente em {$template}.");
 }
 
-foreach (array_merge(glob(dirname(__DIR__) . '/*.php'), glob(__DIR__ . '/*.php'), glob(dirname(__DIR__) . '/templates/*.php'), glob(dirname(__DIR__) . '/lang/*.php')) as $phpFile) {
-    $output = [];
-    $exitCode = 0;
-    exec(PHP_BINARY . ' -l ' . escapeshellarg($phpFile), $output, $exitCode);
-    expect($exitCode === 0, 'Erro de sintaxe em ' . basename($phpFile));
+if (!$noSubprocesses) {
+    foreach (array_merge(glob(dirname(__DIR__) . '/*.php'), glob(__DIR__ . '/*.php'), glob(dirname(__DIR__) . '/templates/*.php'), glob(dirname(__DIR__) . '/lang/*.php')) as $phpFile) {
+        $output = [];
+        $exitCode = 0;
+        exec(PHP_BINARY . ' -l ' . escapeshellarg($phpFile), $output, $exitCode);
+        expect($exitCode === 0, 'Erro de sintaxe em ' . basename($phpFile));
+    }
+
 }
 
-// Seis processos concorrentes devem instalar um único schema completo.
-$concurrentDb = $testDb . '.concurrent.db';
-register_shutdown_function(static function () use ($concurrentDb): void {
-    foreach ([$concurrentDb, $concurrentDb . '-wal', $concurrentDb . '-shm', $concurrentDb . '.migration.lock'] as $file) {
-        if (is_file($file)) unlink($file);
+if (!$noSubprocesses) {
+    // Seis processos concorrentes devem instalar um único schema completo.
+    $concurrentDb = $testDb . '.concurrent.db';
+    register_shutdown_function(static function () use ($concurrentDb): void {
+        foreach ([$concurrentDb, $concurrentDb . '-wal', $concurrentDb . '-shm', $concurrentDb . '.migration.lock'] as $file) {
+            if (is_file($file)) unlink($file);
+        }
+    });
+    $workers = [];
+    for ($i = 0; $i < 6; $i++) {
+        $worker = proc_open([PHP_BINARY, __DIR__ . '/migration-worker.php', $concurrentDb], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $workerPipes);
+        $workers[] = [$worker, $workerPipes];
     }
-});
-$workers = [];
-for ($i = 0; $i < 6; $i++) {
-    $worker = proc_open([PHP_BINARY, __DIR__ . '/migration-worker.php', $concurrentDb], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $workerPipes);
-    $workers[] = [$worker, $workerPipes];
-}
-foreach ($workers as [$worker, $workerPipes]) {
-    fclose($workerPipes[0]);
-    $output = stream_get_contents($workerPipes[1]);
-    $errorOutput = stream_get_contents($workerPipes[2]);
-    fclose($workerPipes[1]); fclose($workerPipes[2]);
-    expect(proc_close($worker) === 0 && trim($output) === '3' && $errorOutput === '', 'Instalação concorrente falhou: ' . $errorOutput);
+    foreach ($workers as [$worker, $workerPipes]) {
+        fclose($workerPipes[0]);
+        $output = stream_get_contents($workerPipes[1]);
+        $errorOutput = stream_get_contents($workerPipes[2]);
+        fclose($workerPipes[1]); fclose($workerPipes[2]);
+        expect(proc_close($worker) === 0 && trim($output) === '3' && $errorOutput === '', 'Instalação concorrente falhou: ' . $errorOutput);
+    }
+
 }
 
 // Redes de bootstrap e proxies devem funcionar também em PHP de 32 bits.
@@ -207,35 +216,38 @@ expect(cachedHealth($pdo, $restored)['status'] === 'unknown', 'Reserva de monito
 $pdo->prepare('UPDATE health_cache SET checked_at=?, status=1 WHERE tool_id=?')->execute([time(), $restored['id']]);
 expect(cachedHealth($pdo, $restored)['status'] === 'ok', 'Cache válido ignorado.');
 
-// Verificação HTTP real, isolada e sem depender de serviços externos.
-$socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-$address = stream_socket_get_name($socket, false);
-fclose($socket);
-$fixture = proc_open([PHP_BINARY, '-S', $address, __DIR__ . '/http-fixture.php'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__));
-if (!is_resource($fixture)) throw new RuntimeException('Não foi possível iniciar o servidor de teste.');
-try {
-    for ($i = 0; $i < 250; $i++) {
-        $ready = @stream_socket_client('tcp://' . $address, $errno, $errstr, .1);
-        if ($ready) { fclose($ready); break; }
-        usleep(20000);
+if (!$noSubprocesses) {
+    // Verificação HTTP real, isolada e sem depender de serviços externos.
+    $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+    $address = stream_socket_get_name($socket, false);
+    fclose($socket);
+    $fixture = proc_open([PHP_BINARY, '-S', $address, __DIR__ . '/http-fixture.php'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__));
+    if (!is_resource($fixture)) throw new RuntimeException('Não foi possível iniciar o servidor de teste.');
+    try {
+        for ($i = 0; $i < 250; $i++) {
+            $ready = @stream_socket_client('tcp://' . $address, $errno, $errstr, .1);
+            if ($ready) { fclose($ready); break; }
+            usleep(20000);
+        }
+        $local = ['url' => 'http://' . $address . '/?code=200', 'health_url' => '', 'health_method' => 'auto', 'health_codes' => '200-399'];
+        expect(checkHealth($local), 'HTTP 200 em porta não padrão foi rejeitado.');
+        $local['url'] = 'http://' . $address . '/?code=500';
+        expect(!checkHealth($local), 'HTTP 500 foi marcado online.');
+        $local['url'] = 'http://' . $address . '/?code=401';
+        expect(!checkHealth($local), 'HTTP 401 deveria exigir configuração explícita.');
+        $local['health_codes'] = '200-399,401';
+        expect(checkHealth($local), 'HTTP 401 explicitamente permitido foi rejeitado.');
+        $pdo->prepare('DELETE FROM health_cache WHERE tool_id=?')->execute([$restored['id']]);
+        $staleTool = $restored;
+        $staleTool['health_url'] = 'http://' . $address . '/?code=200';
+        expect(cachedHealth($pdo, $staleTool)['status'] === 'unknown', 'Checagem de uma configuração antiga sobrescreveu o cache atual.');
+    } finally {
+        // O servidor já concluiu as requisições; SIGKILL evita espera por handlers sob QEMU.
+        proc_terminate($fixture, 9);
+        foreach ($pipes as $pipe) fclose($pipe);
+        proc_close($fixture);
     }
-    $local = ['url' => 'http://' . $address . '/?code=200', 'health_url' => '', 'health_method' => 'auto', 'health_codes' => '200-399'];
-    expect(checkHealth($local), 'HTTP 200 em porta não padrão foi rejeitado.');
-    $local['url'] = 'http://' . $address . '/?code=500';
-    expect(!checkHealth($local), 'HTTP 500 foi marcado online.');
-    $local['url'] = 'http://' . $address . '/?code=401';
-    expect(!checkHealth($local), 'HTTP 401 deveria exigir configuração explícita.');
-    $local['health_codes'] = '200-399,401';
-    expect(checkHealth($local), 'HTTP 401 explicitamente permitido foi rejeitado.');
-    $pdo->prepare('DELETE FROM health_cache WHERE tool_id=?')->execute([$restored['id']]);
-    $staleTool = $restored;
-    $staleTool['health_url'] = 'http://' . $address . '/?code=200';
-    expect(cachedHealth($pdo, $staleTool)['status'] === 'unknown', 'Checagem de uma configuração antiga sobrescreveu o cache atual.');
-} finally {
-    // O servidor já concluiu as requisições; SIGKILL evita espera por handlers sob QEMU.
-    proc_terminate($fixture, 9);
-    foreach ($pipes as $pipe) fclose($pipe);
-    proc_close($fixture);
+
 }
 
 if ($failures !== []) {
