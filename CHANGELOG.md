@@ -9,6 +9,7 @@ Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo
 - Migração 3 acrescenta versão de sessão, configuração de monitoramento e reservas de cache sem descartar dados.
 - Trocar senha revoga todas as sessões do usuário; expiração absoluta passa a ser conferida no servidor. Sessões antigas exigem novo login.
 - Inicialização/migração SQLite serializada por lock de arquivo; verificada com seis processos concorrentes.
+- Comparação de redes do cadastro inicial usa bytes e funciona também no PHP de 32 bits (arm/v7).
 - Cadastro inicial revalida a ausência de usuários sob lock de escrita.
 - Monitoramento HTTP preserva o protocolo em portas não padrão e aceita códigos configurados (padrão 200–399). TCP e NTP são métodos explícitos.
 - Cache compartilhado com o endpoint antigo e reserva por serviço evitam checagens duplicadas. Navegador limita a concorrência a dois lotes e distingue falha de consulta de serviço offline.

@@ -7,25 +7,11 @@ $sessionDays = min(365, max(1, $sessionDays ?: 7));
 $lifetime = $sessionDays * 86400;
 
 function isLocalOrPrivateIp($ip) {
-    if (!filter_var($ip, FILTER_VALIDATE_IP)) return false;
-
-    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-        $value = ip2long($ip);
-        return (($value & 0xff000000) === 0x0a000000)       // 10.0.0.0/8
-            || (($value & 0xfff00000) === 0xac100000)      // 172.16.0.0/12
-            || (($value & 0xffff0000) === 0xc0a80000)      // 192.168.0.0/16
-            || (($value & 0xff000000) === 0x7f000000)      // loopback
-            || (($value & 0xffff0000) === 0xa9fe0000);     // link-local
+    // Comparação binária também funciona no PHP de 32 bits (arm/v7).
+    foreach (['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16', '::1', 'fc00::/7', 'fe80::/10'] as $range) {
+        if (ipMatchesRange($ip, $range)) return true;
     }
-
-    $packed = inet_pton($ip);
-    if ($packed === false) return false;
-    if ($packed === inet_pton('::1')) return true;
-
-    $first = ord($packed[0]);
-    $second = ord($packed[1]);
-    return (($first & 0xfe) === 0xfc)                      // fc00::/7
-        || ($first === 0xfe && ($second & 0xc0) === 0x80); // fe80::/10
+    return false;
 }
 
 // Compara um IP com um endereço ou bloco CIDR (IPv4 e IPv6).
