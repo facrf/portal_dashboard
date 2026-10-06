@@ -214,7 +214,7 @@ fclose($socket);
 $fixture = proc_open([PHP_BINARY, '-S', $address, __DIR__ . '/http-fixture.php'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__));
 if (!is_resource($fixture)) throw new RuntimeException('Não foi possível iniciar o servidor de teste.');
 try {
-    for ($i = 0; $i < 50; $i++) {
+    for ($i = 0; $i < 250; $i++) {
         $ready = @stream_socket_client('tcp://' . $address, $errno, $errstr, .1);
         if ($ready) { fclose($ready); break; }
         usleep(20000);
@@ -232,7 +232,8 @@ try {
     $staleTool['health_url'] = 'http://' . $address . '/?code=200';
     expect(cachedHealth($pdo, $staleTool)['status'] === 'unknown', 'Checagem de uma configuração antiga sobrescreveu o cache atual.');
 } finally {
-    proc_terminate($fixture);
+    // O servidor já concluiu as requisições; SIGKILL evita espera por handlers sob QEMU.
+    proc_terminate($fixture, 9);
     foreach ($pipes as $pipe) fclose($pipe);
     proc_close($fixture);
 }

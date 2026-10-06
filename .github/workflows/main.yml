@@ -79,13 +79,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Verify PHP runtime on every architecture
+      - name: Verify PHP runtime (amd64)
+        timeout-minutes: 3
         env:
           CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-        run: |
-          for platform in linux/amd64 linux/arm64 linux/arm/v7 linux/riscv64; do
-            docker run --rm --platform "$platform" "$CANDIDATE_IMAGE" php tests/run.php
-          done
+        run: docker run --rm --pull always --platform linux/amd64 "$CANDIDATE_IMAGE" php tests/run.php
+      - name: Verify PHP runtime (arm64)
+        timeout-minutes: 3
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+        run: docker run --rm --pull always --platform linux/arm64 "$CANDIDATE_IMAGE" php tests/run.php
+      - name: Verify PHP runtime (arm-v7)
+        timeout-minutes: 3
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+        run: docker run --rm --pull always --platform linux/arm/v7 "$CANDIDATE_IMAGE" php tests/run.php
+      - name: Verify PHP runtime (riscv64)
+        timeout-minutes: 3
+        env:
+          CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+        run: docker run --rm --pull always --platform linux/riscv64 "$CANDIDATE_IMAGE" php tests/run.php
       - name: Publish validated tags
         env:
           CANDIDATE_IMAGE: ghcr.io/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
