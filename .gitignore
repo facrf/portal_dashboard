@@ -28,3 +28,8 @@ icons/*
 #lixo feito por LLM
 cookie.txt
 *.cookie
+
+# Arquivos auxiliares do SQLite
+*.db-wal
+*.db-shm
+*.db-journal

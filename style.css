@@ -1086,3 +1086,13 @@ body.light-theme .btn-glow {
         text-align: center;
     }
 }
+
+/* Retorno de salvamento e prévia de importação. */
+#save-feedback { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 100; padding: .8rem 1rem; border-radius: .5rem; background: #163b29; color: #fff; max-width: 90vw; }
+#save-feedback.failed, .import-error { background: #7f1d1d; color: #fff; }
+.import-preview { padding: 1rem; margin-bottom: 1.5rem; border: 1px solid var(--input-focus-border); border-radius: .5rem; }
+.import-preview details { margin: .8rem 0; }
+.import-preview ul { max-height: 18rem; overflow: auto; overflow-wrap: anywhere; }
+.health-settings { border: 1px solid var(--input-focus-border); border-radius: .5rem; margin: 1rem 0; padding: 1rem; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--input-focus-border); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

@@ -9,6 +9,6 @@ mkdir -p "$PORTAL_DB_DIR" /var/www/html/icons
 
 # Garante permissões para o processo PHP-FPM (www-data).
 chown -R www-data:www-data "$PORTAL_DB_DIR"
-chown -R www-data:www-data /var/www/html/icons
+# Ícones são apenas lidos pela aplicação; volumes podem ser montados como somente leitura.
 
 exec "$@"

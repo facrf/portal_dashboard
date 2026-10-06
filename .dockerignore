@@ -10,6 +10,9 @@
 .env
 .env.*
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
 db_data
@@ -22,3 +25,6 @@ icons/*
 # Arquivos sem uso em tempo de execução
 *.md
 LICENSE
+
+# Logs temporários de validação
+.build-*.log

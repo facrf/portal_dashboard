@@ -44,9 +44,13 @@ Use mensagens de commit claras, curtas e objetivas, no formato:
 
     index.php — portal público e monitoramento
     admin.php / config.php — áreas administrativas
-    db.php — conexão, schema, migrações e sessão
+    db.php — inicialização compartilhada
+    database.php — conexão, schema e migrações
+    auth.php / i18n.php — sessão, acesso e idiomas
+    health.php / imports.php — monitoramento e importação
+    templates/ / assets/ — componentes compartilhados
     helpers.php — validação compartilhada
-    tests/run.php — testes rápidos sem dependências externas
+    tests/ — regressões PHP, JavaScript e integração HTTP
     Arquivos devem permanecer simples, legíveis e sem código não utilizado
 
 🌍 Traduções (i18n)
@@ -61,6 +65,9 @@ Use mensagens de commit claras, curtas e objetivas, no formato:
 
     docker build -t portal-dashboard:test .
     docker run --rm portal-dashboard:test php tests/run.php
+    docker run --rm -v "$PWD:/app:ro" -w /app node:22-alpine sh -c 'node --check assets/ui.js && node tests/ui.cjs'
+
+    Consulte README.md para executar a integração HTTP contra um contêiner vazio e descartável.
 
 🚫 O que evitar
 

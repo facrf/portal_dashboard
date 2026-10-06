@@ -3,7 +3,7 @@
 > Un dashboard ligero, extremadamente personalizable y enfocado en la privacidad para tu Homelab / Homeserver.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4.svg)](https://www.php.net/)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%208.1-777bb4.svg)](https://www.php.net/)
 [![SQLite Version](https://img.shields.io/badge/SQLite-3-003b57.svg)](https://www.sqlite.org/)
 
 El **Portal Dashboard** es una alternativa minimalista y segura a herramientas como Heimdall y Homepage. Está diseñado para quienes desean centralizar los accesos de su servidor doméstico sin renunciar al control total sobre sus datos.
@@ -32,7 +32,7 @@ El **Portal Dashboard** es una alternativa minimalista y segura a herramientas c
 
 ## 🛠️ Tecnologías Utilizadas
 
-* **Backend:** PHP (8.0+)
+* **Backend:** PHP (8.1+)
 * **Servidor Web:** Nginx
 * **Base de Datos:** SQLite 3
 * **Licencia:** GNU GPL v3
@@ -47,8 +47,8 @@ Puedes ejecutar Portal Dashboard directamente en tu servidor web preferido o med
 
 1. **Requisitos Previos:**
    * Servidor Web (Apache, Nginx, etc.)
-   * PHP 8.0 o superior instalado.
-   * Extensión `php-sqlite3` habilitada.
+   * PHP 8.1 o superior instalado.
+   * Extensiones `pdo_sqlite`, `mbstring` y `curl` habilitadas; `yaml` para importar Homepage.
 
 2. **Clonar el Repositorio:**
    ```bash
@@ -147,3 +147,27 @@ Consulta también el [changelog](CHANGELOG.md) para conocer los detalles de actu
 ---
 
 Creado con ☕ por **facrf**.
+
+---
+
+## Monitoreo, sesiones e importación
+
+Cada servicio admite verificaciones `auto`, `http`, `tcp` y `ntp`, un destino separado del enlace y códigos HTTP aceptados. El valor predeterminado es `200-399`; use `200-399,401,403` para servicios con autenticación. HTTP utiliza HEAD, no sigue redirecciones y valida los certificados TLS. HTTPS en el puerto 8443 sigue siendo HTTPS. TCP comprueba la conexión; NTP valida el modo servidor y stratum 1–15. En modo automático, `udp://` representa NTP; no se admiten otros protocolos UDP.
+
+La caché compartida dura 45 segundos, incluidos los endpoints antiguos. Una reserva de ocho segundos evita verificaciones duplicadas. El navegador ejecuta como máximo dos lotes simultáneos de cinco servicios. Los fallos de consulta aparecen como **indeterminado**. Los indicadores se actualizan al cargar la página; recárguela para actualizar.
+
+Cambiar una contraseña revoca todas las sesiones del usuario, incluida la actual. El servidor verifica la duración absoluta desde el inicio de sesión. Las sesiones existentes requieren un nuevo inicio después de la migración. Reducir la duración tiene efecto en la siguiente solicitud.
+
+Las importaciones requieren revisar una vista previa y aplicar explícitamente. La vista muestra servicios válidos, elementos omitidos y errores; caduca en diez minutos y se invalida si cambian los datos. La aplicación es transaccional. La copia nativa reemplaza configuraciones, categorías y servicios, conserva cuentas e incluye monitoreo, orden y etiquetas. La exportación JSON no contiene usuarios ni contraseñas. Haga una copia antes de restaurar. Heimdall y Homepage añaden solo servicios válidos revisados. YAML usa la extensión PHP `yaml`, admite comentarios, comillas y textos multilínea, y rechaza varios documentos, anclas, alias y etiquetas explícitas. Límites: 5 MB, 500 categorías, 5.000 servicios y 20.000 líneas YAML.
+
+Las reglas Nginx y Apache bloquean el banco y sus archivos `-wal`, `-shm` y `-journal`. Apache debe respetar `.htaccess`. Otros servidores deben bloquear `db_data`, `tests`, `templates`, `lang` y los módulos PHP internos. Prefiera guardar el banco fuera de la raíz pública. Los iconos se pueden montar en modo de solo lectura.
+
+La ordenación informa del resultado y restaura el orden anterior de la interfaz al fallar. La búsqueda externa requiere pulsar un enlace identificado de DuckDuckGo. Las imágenes externas configuradas también contactan con sus servidores.
+
+## Desarrollo y publicación
+
+`db.php` carga `database.php` (SQLite y migraciones), `i18n.php` (idiomas) y `auth.php` (sesiones y acceso). `health.php` concentra el monitoreo; `imports.php`, la importación; `templates/`, las plantillas compartidas; y `assets/ui.js`, el JavaScript compartido.
+
+CI valida pull requests. Los pushes a main, releases y ejecuciones manuales validan antes de publicar en GHCR para `linux/amd64`, `linux/arm64` y `linux/arm/v7`. Etiquetas: `latest` en la rama principal, `sha-<SHA completo>` y versiones semánticas. GitHub debe permitir escritura en Packages mediante `GITHUB_TOKEN`. Los repositorios espejados publican después de que los cambios lleguen a GitHub.
+
+Ejecute las pruebas PHP, JavaScript y HTTP según [README.md](README.md#desenvolvimento-e-publicação). La suite HTTP requiere un contenedor descartable con banco vacío: crea usuarios, cambia contraseñas y restaura servicios de prueba. La suite PHP elimina su banco temporal automáticamente.

@@ -29,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         header("Location: index.php");
         exit;
     } else {
-        die("Tentativa de logout bloqueada por falha de segurança (CSRF).");
+        http_response_code(403);
+        die(t('csrf_invalid'));
     }
 }
 
@@ -62,12 +63,9 @@ if ($attemptData && $attemptData['attempts'] >= $maxAttempts) {
     $timePassed = time() - $attemptData['last_attempt'];
     if ($timePassed < $lockoutTime) {
         $remaining = ceil(($lockoutTime - $timePassed) / 60);
-        // Exibe tela estática para não consumir recursos renderizando a página completa
-        die("<div style='background:#1e1e2e; color:#ff4d4d; padding:2rem; text-align:center; font-family:sans-serif; border-radius: 8px; max-width: 500px; margin: 10vh auto; border: 1px solid rgba(255,77,77,0.3);'>
-            <h2>Acesso Bloqueado</h2>
-            <p>Muitas tentativas falhas de login detectadas por este IP.</p>
-            <p>Tente novamente em <b>{$remaining} minutos</b>.</p>
-        </div>");
+        http_response_code(429);
+        header('Retry-After: ' . ($lockoutTime - $timePassed));
+        die(htmlspecialchars(t('login_blocked_help') . ' ' . t('login_wait', ['minutes' => $remaining]), ENT_QUOTES, 'UTF-8'));
     } else {
         // Passou o tempo de castigo, perdoa o IP
         $pdo->prepare("DELETE FROM login_attempts WHERE ip = ?")->execute([$ip]);
@@ -79,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validação CSRF
     $submittedToken = $_POST['csrf_token'] ?? null;
     if (!is_string($submittedToken) || !hash_equals($_SESSION['csrf_token'], $submittedToken)) {
-        $error = "Sessão expirada ou requisição inválida.";
+        $error = t('session_invalid');
     } else {
         $username = is_string($_POST['username'] ?? null) ? trim($_POST['username']) : '';
         $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
@@ -97,26 +95,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 && !hasUntrustedProxyHeaders();
 
             if (!$isLocalSetup) {
-                die("<div style='background:#1e1e2e; color:#ff4d4d; padding:2rem; text-align:center; font-family:sans-serif; border-radius: 8px; max-width: 500px; margin: 10vh auto;'>
-                    <h2>Ação Bloqueada</h2>
-                    <p>Por segurança, o cadastro inicial exige acesso local e não aceita cabeçalhos de proxy não confiável.</p>
-                    <p>Acesse diretamente pela LAN (ex: <i>192.168.x.x</i>) ou configure corretamente
-                    <code>PORTAL_TRUSTED_PROXIES</code> antes de realizar o setup.</p>
-                </div>");
+                http_response_code(403);
+                die(htmlspecialchars(t('setup_blocked'), ENT_QUOTES, 'UTF-8'));
             }
 
             try {
                 validateUsername($username);
                 validatePassword($password, true);
+                $pdo->exec('BEGIN IMMEDIATE');
+                if ((int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 0) {
+                    $pdo->exec('ROLLBACK');
+                    throw new InvalidArgumentException(t('setup_already_done'));
+                }
                 $hash = password_hash($password, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
                 $stmt->execute([$username, $hash]);
                 $userId = (int) $pdo->lastInsertId();
+                $pdo->exec('COMMIT');
 
-                session_regenerate_id(true);
-                $_SESSION['logged_in'] = true;
-                $_SESSION['user_id'] = $userId;
-                $_SESSION['username'] = $username;
+                startAuthenticatedSession(['id' => $userId, 'username' => $username, 'session_version' => 1]);
                 header('Location: ' . $next);
                 exit;
             } catch (InvalidArgumentException $e) {
@@ -136,11 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Login com sucesso: reseta os bloqueios do IP e previne Fixação de Sessão
                 $pdo->prepare("DELETE FROM login_attempts WHERE ip = ?")->execute([$ip]);
-                session_regenerate_id(true); 
-                
-                $_SESSION['logged_in'] = true;
-                $_SESSION['user_id'] = (int) $user['id'];
-                $_SESSION['username'] = $user['username'];
+                startAuthenticatedSession($user);
                 header('Location: ' . $next);
                 exit;
                 
@@ -152,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Delay aleatório suave (0.5 a 1s) para mitigar Timing Attacks de varredura
                 usleep(rand(500000, 1000000)); 
-                $error = "Usuário ou senha incorretos.";
+                $error = t('login_invalid');
             }
         }
     }
@@ -161,26 +154,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $currentLang = $settings['language'] ?? 'pt';
 ?>
 
-<!-- ... O Restante do HTML do seu login.php vem aqui para baixo ... -->
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>">
 <head>
     <!-- Developed with care by FACRF - https://github.com/facrf -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isFirstAccess ? 'Primeiro Acesso' : 'Login' ?> - <?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>
+    <title><?= $isFirstAccess ? t('first_access') : t('login_title') ?> - <?= htmlspecialchars($settings['portal_name'], ENT_QUOTES, 'UTF-8') ?></title>
     
-    <?php $favicon = resolveIconUrl($settings['favicon']); if(!empty($favicon)): ?>
-        <link rel="icon" href="<?= $favicon ?>">
-    <?php endif; ?>
-
-    <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>">
+    <?php require __DIR__ . '/templates/head-assets.php'; ?>
     <style>
-        :root { 
-            --bg-color: <?= validatedColor((string) $settings['bg_color'], '#1e1e2e') ?>;
-            --bg-image: <?= !empty($settings['bg_image']) ? "url('" . htmlspecialchars($settings['bg_image'], ENT_QUOTES, 'UTF-8') . "')" : 'none' ?>; 
-            --text-color: <?= validatedColor((string) $settings['text_color'], '#cdd6f4') ?>;
-        }
         .login-container {
             max-width: 400px;
             margin: 10vh auto;
@@ -201,10 +184,10 @@ $currentLang = $settings['language'] ?? 'pt';
 <body>
     <div class="container">
         <div class="login-container">
-            <h2><?= $isFirstAccess ? 'Configurar Administrador' : 'Acesso Restrito' ?></h2>
+            <h2><?= $isFirstAccess ? t('setup_admin') : t('restricted_access') ?></h2>
             
             <?php if ($isFirstAccess): ?>
-                <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;">Crie o primeiro usuário para administrar o portal.</p>
+                <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;"><?= t('setup_help') ?></p>
             <?php endif; ?>
 
             <?php if ($error): ?>
@@ -215,14 +198,14 @@ $currentLang = $settings['language'] ?? 'pt';
                 <input type="hidden" name="next" value="<?= htmlspecialchars($next, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                 <div class="form-group">
-                    <label>Usuário:</label>
-                    <input type="text" name="username" required maxlength="64" autofocus autocomplete="username">
+                    <label for="login-username-1"><?= t('username') ?>:</label>
+                    <input id="login-username-1" type="text" name="username" required maxlength="64" autofocus autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label>Senha:</label>
-                    <input type="password" name="password" required minlength="10" maxlength="72" autocomplete="<?= $isFirstAccess ? 'new-password' : 'current-password' ?>">
+                    <label for="login-password-2"><?= t('password') ?>:</label>
+                    <input id="login-password-2" type="password" name="password" required minlength="10" maxlength="72" autocomplete="<?= $isFirstAccess ? 'new-password' : 'current-password' ?>">
                 </div>
-                <button type="submit" class="btn btn-glow"><?= $isFirstAccess ? 'Cadastrar e Entrar' : 'Entrar' ?></button>
+                <button type="submit" class="btn btn-glow"><?= $isFirstAccess ? t('setup_submit') : t('login_submit') ?></button>
             </form>
             <p><a href="index.php" class="btn">← <?= t('dashboard') ?></a></p>
         </div>

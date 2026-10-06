@@ -2,7 +2,28 @@
 
 Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo.
 
-## Não publicado
+## 2026-10-06 — Sessões, monitoramento e importação
+
+- Bloqueado acesso HTTP ao diretório do banco, arquivos auxiliares SQLite e módulos internos.
+- Separadas conexão/migrações, autenticação, idiomas, monitoramento e importação em módulos próprios; extraídos templates e JavaScript comuns.
+- Migração 3 acrescenta versão de sessão, configuração de monitoramento e reservas de cache sem descartar dados.
+- Trocar senha revoga todas as sessões do usuário; expiração absoluta passa a ser conferida no servidor. Sessões antigas exigem novo login.
+- Inicialização/migração SQLite serializada por lock de arquivo; verificada com seis processos concorrentes.
+- Cadastro inicial revalida a ausência de usuários sob lock de escrita.
+- Monitoramento HTTP preserva o protocolo em portas não padrão e aceita códigos configurados (padrão 200–399). TCP e NTP são métodos explícitos.
+- Cache compartilhado com o endpoint antigo e reserva por serviço evitam checagens duplicadas. Navegador limita a concorrência a dois lotes e distingue falha de consulta de serviço offline.
+- Importação usa parser YAML real, prévia com contagens/erros, confirmação, expiração de dez minutos e detecção de dados alterados. Backup inclui monitoramento e preserva contas.
+- Salvamento da ordem ganhou confirmação e restauração visual em caso de falha.
+- Completados textos dos formulários e fluxos novos em português, inglês e espanhol; labels associados aos campos e suporte a movimento reduzido.
+- Busca externa passou a exigir clique explícito no link identificado para DuckDuckGo.
+- Requisitos documentados: PHP 8.1+, pdo_sqlite, mbstring e curl; yaml para Homepage. Docker inclui todas essas extensões e permite ícones somente leitura.
+- CI valida pull requests, testes PHP/JavaScript e integração real com Nginx/PHP-FPM antes de publicar amd64, arm64 e arm/v7 no GHCR.
+
+### Atualização desta versão
+
+Faça backup antes de atualizar e mantenha o volume do banco. As migrações são automáticas; será necessário entrar novamente. Revise serviços que respondem HTTP 401/403 e ajuste os códigos aceitos. Para servidores personalizados, replique os bloqueios de diretórios e arquivos auxiliares do banco. Imagens externas e pesquisas iniciadas pelo usuário podem acessar serviços externos.
+
+## Histórico anterior
 
 ### Segurança
 

@@ -3,7 +3,7 @@
 > Um dashboard leve, extremamente customizável e focado em privacidade para o seu Homelab / Homeserver.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4.svg)](https://www.php.net/)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%208.1-777bb4.svg)](https://www.php.net/)
 [![SQLite Version](https://img.shields.io/badge/SQLite-3-003b57.svg)](https://www.sqlite.org/)
 
 O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas como Heimdall e Homepage. Ele foi projetado para quem deseja centralizar os acessos do seu servidor caseiro sem abrir mão do controle total sobre seus dados.
@@ -32,7 +32,7 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 
 ## 🛠️ Tecnologias Utilizadas
 
-* **Backend:** PHP (8.0+)
+* **Backend:** PHP (8.1+)
 * **Servidor Web:** Nginx
 * **Banco de Dados:** SQLite 3
 * **Licença:** GNU GPL v3
@@ -47,8 +47,8 @@ Você pode rodar o Portal Dashboard diretamente no seu servidor web de preferên
 
 1. **Requisitos Prévios:**
    * Servidor Web (Apache, Nginx, etc.)
-   * PHP 8.0 ou superior instalado.
-   * Extensão `php-sqlite3` habilitada.
+   * PHP 8.1 ou superior instalado.
+   * Extensões `pdo_sqlite`, `mbstring` e `curl` habilitadas; `yaml` para importar Homepage.
 
 2. **Clonar o Repositório:**
    ```bash
@@ -160,3 +160,41 @@ Feedbacks, relatórios de bugs e Pull Requests são extremamente bem-vindos!
 ---
 
 Criado com ☕ por **facrf**.
+
+---
+
+## Monitoramento, sessões e importação
+
+Cada serviço pode configurar um método (`auto`, `http`, `tcp`, `ntp`), um destino de monitoramento separado do link e os códigos HTTP aceitos. O padrão HTTP é `200-399`; para serviços que respondem com autenticação, use por exemplo `200-399,401,403`. A verificação HTTP usa HEAD, não segue redirecionamentos e valida o certificado TLS. HTTPS em portas como 8443 continua sendo verificado por HTTPS. TCP verifica a abertura da conexão; NTP exige resposta válida, com modo servidor e stratum de 1 a 15. No modo automático, `udp://` é tratado como NTP; outros protocolos UDP não são suportados.
+
+O cache dura 45 segundos e é compartilhado pelos endpoints atuais e antigos. Uma reserva de até 8 segundos impede verificações simultâneas do mesmo serviço. O navegador usa no máximo dois lotes simultâneos, com até cinco serviços por lote. Falhas na consulta do portal aparecem como **indeterminado**, sem afirmar que o serviço está offline. Os indicadores são atualizados ao carregar a página; recarregue para consultar novamente.
+
+Trocar uma senha revoga todas as sessões desse usuário, inclusive a sessão usada para fazer a alteração. A duração configurada é contada desde o login e conferida no servidor. Sessões anteriores à migração precisarão de um novo login. Diminuir a duração passa a valer na próxima requisição.
+
+A importação tem duas etapas: **Revisar importação** e **Aplicar importação**. A prévia mostra serviços válidos, itens sem destino e erros. Ela expira em 10 minutos e é rejeitada se os dados do portal mudarem nesse intervalo. Cancelar ou falhar na validação mantém os dados existentes. A aplicação é transacional.
+
+O backup nativo substitui configurações, categorias e serviços; contas e senhas são preservadas e não estão incluídas na exportação JSON. Configurações de monitoramento, tags e ordem são incluídas. Faça um backup antes de restaurar. Heimdall e Homepage adicionam apenas os serviços válidos revisados. O YAML é lido pela extensão `yaml`, suporta comentários, aspas e textos multilinha, e rejeita múltiplos documentos, âncoras, aliases e tags explícitas. Limites: 5 MB, 500 categorias, 5.000 serviços e 20.000 linhas YAML.
+
+Arquivos do banco e seus auxiliares (`-wal`, `-shm`, `-journal`) ficam bloqueados no Nginx e Apache fornecidos. O Apache precisa respeitar `.htaccess`; em configurações próprias, bloqueie explicitamente `db_data`, `tests`, `templates`, `lang` e os módulos PHP internos. Prefira `PORTAL_DB_PATH` fora da raiz pública e mantenha as permissões de escrita apenas no diretório do banco. Os ícones podem ser montados como somente leitura.
+
+A ordenação confirma o salvamento e restaura a posição anterior na interface em caso de falha. A busca externa exige clicar em **Pesquisar na web**, que informa o envio ao DuckDuckGo. Imagens e ícones externos configurados também fazem requisições a seus respectivos servidores.
+
+## Desenvolvimento e publicação
+
+A inicialização está dividida em `database.php` (SQLite e migrações), `auth.php` (sessões e acesso) e `i18n.php` (idiomas), carregados por `db.php`. A instalação e as migrações usam um lock por banco para impedir alterações concorrentes de schema. `health.php` concentra o monitoramento; `imports.php` concentra normalização, prévia e restauração. Os templates compartilhados estão em `templates/` e o JavaScript comum em `assets/ui.js`.
+
+O CI valida pull requests antes do merge. Pushes em `main`, releases e execução manual validam o projeto antes de publicar no GHCR. Publicação: `linux/amd64`, `linux/arm64`, `linux/arm/v7`; tags `latest` na branch principal, `sha-<SHA completo>` e versões semânticas nas releases. O repositório no GitHub precisa permitir escrita em Packages pelo `GITHUB_TOKEN`. Quando o desenvolvimento usa um remoto espelhado, o workflow inicia após o espelhamento alcançar o GitHub.
+
+Validação completa local:
+
+```bash
+docker build -t portal-dashboard:test .
+docker run --rm portal-dashboard:test php tests/run.php
+docker run --rm -v "$PWD:/app:ro" -w /app node:22-alpine sh -c 'node --check assets/ui.js && node tests/ui.cjs'
+docker run --rm -d --name portal-integration -p 127.0.0.1:18080:80 portal-dashboard:test
+python3 tests/integration.py
+docker run --rm --network container:portal-integration -v "$PWD:/app:ro" -w /app node:22-alpine node tests/rendered.cjs
+docker stop portal-integration
+```
+
+Execute o teste HTTP exclusivamente contra um contêiner descartável com banco vazio: ele cria usuários, altera senhas e restaura serviços de teste. As suítes PHP removem o próprio banco temporário ao terminar.

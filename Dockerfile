@@ -4,8 +4,11 @@ FROM php:8.3-fpm-alpine
 ENV PORTAL_DB_PATH=/var/www/db_data/bd.db
 
 # Instala Nginx, Supervisor e SQLite.
-RUN apk add --no-cache nginx supervisor sqlite-dev ca-certificates && \
-    docker-php-ext-install pdo pdo_sqlite
+RUN apk add --no-cache nginx supervisor ca-certificates libcurl oniguruma yaml && \
+    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS sqlite-dev curl-dev oniguruma-dev yaml-dev && \
+    docker-php-ext-install pdo pdo_sqlite mbstring curl && \
+    pecl install yaml-2.3.0 && docker-php-ext-enable yaml && \
+    apk del .build-deps
 
 # Configura os processos da imagem.
 COPY nginx.conf /etc/nginx/nginx.conf
