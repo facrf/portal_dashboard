@@ -198,3 +198,5 @@ docker stop portal-integration
 ```
 
 Execute o teste HTTP exclusivamente contra um contêiner descartável com banco vazio: ele cria usuários, altera senhas e restaura serviços de teste. As suítes PHP removem o próprio banco temporário ao terminar.
+
+A imagem Docker usa PHP 8.4 e inclui as extensões necessárias; instalações próprias exigem PHP 8.1+.

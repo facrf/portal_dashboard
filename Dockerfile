@@ -1,11 +1,11 @@
 # Imagem Alpine com PHP-FPM.
-FROM php:8.3-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 ENV PORTAL_DB_PATH=/var/www/db_data/bd.db
 
 # Instala Nginx, Supervisor e SQLite.
 # A imagem oficial já fornece PDO SQLite, mbstring e curl; compile apenas YAML.
-# Download fora do PECL evita o problema PHP 8.3/riscv64 com operações de rede PEAR.
+# O pacote tem checksum fixo e é compilado sem depender de operações de rede PEAR.
 ARG YAML_VERSION=2.3.0
 ARG YAML_SHA256=bc8404807a3a4dc896b310af21a7f8063aa238424ff77f27eb6ffa88b5874b8a
 RUN apk add --no-cache nginx supervisor ca-certificates yaml && \

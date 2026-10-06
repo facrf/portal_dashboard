@@ -144,15 +144,18 @@ if (!$noSubprocesses) {
 testPhase('address, session and monitor settings');
 // Redes de bootstrap e proxies devem funcionar também em PHP de 32 bits.
 foreach (['10.1.2.3', '172.16.0.1', '172.31.255.254', '192.168.0.1', '127.0.0.1', '169.254.1.1', '::1', 'fd00::1', 'fe80::1'] as $ip) {
+    testPhase('private address ' . $ip);
     expect(isLocalOrPrivateIp($ip), 'IP local rejeitado: ' . $ip);
 }
 foreach (['8.8.8.8', '172.32.0.1', '192.169.0.1', '2001:4860:4860::8888', 'invalid'] as $ip) {
+    testPhase('public address ' . $ip);
     expect(!isLocalOrPrivateIp($ip), 'IP público ou inválido aceito no bootstrap: ' . $ip);
 }
 expect(ipMatchesRange('192.168.0.10', '192.168.0.0/24'), 'CIDR IPv4 válido rejeitado.');
 expect(!ipMatchesRange('192.168.1.10', '192.168.0.0/24'), 'CIDR IPv4 aceitou outra rede.');
 expect(ipMatchesRange('fd00::1234', 'fd00::/64'), 'CIDR IPv6 válido rejeitado.');
 
+testPhase('session expiration');
 // Expiração explícita e revogação após mudança da senha.
 $user = ['session_version' => 2];
 $validSession = ['authenticated_at' => 1000, 'session_version' => 2];
@@ -161,11 +164,14 @@ expect(!sessionIsValid($validSession, $user, 100, 1100), 'Sessão expirada foi a
 expect(!sessionIsValid($validSession, ['session_version' => 3], 100, 1050), 'Sessão com versão revogada foi aceita.');
 expect(!sessionIsValid(['session_version' => 2], $user, 100, 1050), 'Sessão antiga sem data de login foi aceita.');
 
+testPhase('monitor target parsing');
 // Protocolos HTTP em portas não padrão continuam sendo HTTP.
 $healthTool = ['url' => 'https://example.test:8443', 'health_url' => '', 'health_method' => 'auto', 'health_codes' => '200-399'];
 expect(healthTarget($healthTool)['method'] === 'http', 'HTTPS em porta 8443 virou TCP.');
+testPhase('monitor target change');
 $healthTool['url'] = 'tcp://127.0.0.1:123';
 expect(healthTarget($healthTool)['method'] === 'tcp', 'TCP em porta 123 virou NTP.');
+testPhase('monitor target change');
 $healthTool['url'] = 'udp://127.0.0.1:123';
 expect(healthTarget($healthTool)['method'] === 'ntp', 'NTP não reconhecido.');
 expect(acceptsHttpCode(302, '200-399') && !acceptsHttpCode(500, '200-399'), 'Códigos HTTP padrão incorretos.');

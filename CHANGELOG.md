@@ -18,6 +18,7 @@ Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo
 - Completados textos dos formulários e fluxos novos em português, inglês e espanhol; labels associados aos campos e suporte a movimento reduzido.
 - Busca externa passou a exigir clique explícito no link identificado para DuckDuckGo.
 - Requisitos documentados: PHP 8.1+, pdo_sqlite, mbstring e curl; yaml para Homepage. Docker inclui todas essas extensões e permite ícones somente leitura.
+- Base Docker atualizada para PHP 8.4; o código mantém compatibilidade com PHP 8.1+.
 - YAML 2.3.0 compilado a partir do pacote oficial com SHA-256 fixo, evitando falha do PECL no PHP 8.3/riscv64.
 - RISC-V executa os testes PHP diretos e integração HTTP externa com Nginx/PHP-FPM; testes CLI que criam subprocessos ficam nas outras arquiteturas devido ao timeout observado sob QEMU.
 - Verificações de runtime por arquitetura têm etapas e limites de tempo próprios; servidor HTTP da suíte é encerrado ao concluir as requisições.
