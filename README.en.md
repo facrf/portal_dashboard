@@ -168,6 +168,6 @@ Reordering reports save success and restores the previous interface order on fai
 
 `db.php` loads `database.php` (SQLite and migrations), `i18n.php` (translations) and `auth.php` (sessions and access). Monitoring lives in `health.php`, imports in `imports.php`, shared templates in `templates/`, and shared JavaScript in `assets/ui.js`.
 
-CI validates pull requests. Main pushes, releases and manual runs validate before publishing GHCR images for `linux/amd64`, `linux/arm64` and `linux/arm/v7`. Tags: `latest` on the default branch, `sha-<full commit SHA>`, and semantic release versions. GitHub must allow Packages writes with `GITHUB_TOKEN`. Mirrored repositories trigger publication once the mirror reaches GitHub.
+CI validates pull requests. Main pushes, releases and manual runs validate before publishing GHCR images for `linux/amd64`, `linux/arm64`, `linux/arm/v7` and `linux/riscv64`. Tags: `latest` on the default branch, `sha-<full commit SHA>`, and semantic release versions. GitHub must allow Packages writes with `GITHUB_TOKEN`. Mirrored repositories trigger publication once the mirror reaches GitHub.
 
 Run the PHP and JavaScript checks and the HTTP integration suite as documented in [README.md](README.md#desenvolvimento-e-publicação). The HTTP suite must target a disposable container with an empty database: it creates accounts, changes passwords and restores test services. The PHP suite removes its temporary database automatically.

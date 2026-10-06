@@ -72,7 +72,7 @@ Você pode rodar o Portal Dashboard diretamente no seu servidor web de preferên
 
 ### 🐳 Instalação com Docker Compose (Recomendado)
 
-Como a imagem do **Portal Dashboard** é compilada automaticamente e hospedada no GitHub Container Registry (GHCR), você não precisa clonar este repositório para rodar o projeto no seu servidor. Suporta `amd64`, `arm64` e `arm32v7`.
+Como a imagem do **Portal Dashboard** é compilada automaticamente e hospedada no GitHub Container Registry (GHCR), você não precisa clonar este repositório para rodar o projeto no seu servidor. Suporta `amd64`, `arm64`, `arm32v7` e `riscv64`.
 
 1. Crie um arquivo chamado `docker-compose.yml` (ou crie uma nova **Stack** no seu Portainer).
 2. Cole o seguinte conteúdo:
@@ -183,7 +183,7 @@ A ordenação confirma o salvamento e restaura a posição anterior na interface
 
 A inicialização está dividida em `database.php` (SQLite e migrações), `auth.php` (sessões e acesso) e `i18n.php` (idiomas), carregados por `db.php`. A instalação e as migrações usam um lock por banco para impedir alterações concorrentes de schema. `health.php` concentra o monitoramento; `imports.php` concentra normalização, prévia e restauração. Os templates compartilhados estão em `templates/` e o JavaScript comum em `assets/ui.js`.
 
-O CI valida pull requests antes do merge. Pushes em `main`, releases e execução manual validam o projeto antes de publicar no GHCR. Publicação: `linux/amd64`, `linux/arm64`, `linux/arm/v7`; tags `latest` na branch principal, `sha-<SHA completo>` e versões semânticas nas releases. O repositório no GitHub precisa permitir escrita em Packages pelo `GITHUB_TOKEN`. Quando o desenvolvimento usa um remoto espelhado, o workflow inicia após o espelhamento alcançar o GitHub.
+O CI valida pull requests antes do merge. Pushes em `main`, releases e execução manual validam o projeto antes de publicar no GHCR. Publicação: `linux/amd64`, `linux/arm64`, `linux/arm/v7`, `linux/riscv64`; tags `latest` na branch principal, `sha-<SHA completo>` e versões semânticas nas releases. O repositório no GitHub precisa permitir escrita em Packages pelo `GITHUB_TOKEN`. Quando o desenvolvimento usa um remoto espelhado, o workflow inicia após o espelhamento alcançar o GitHub.
 
 Validação completa local:
 

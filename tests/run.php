@@ -216,6 +216,10 @@ try {
     expect(!checkHealth($local), 'HTTP 401 deveria exigir configuração explícita.');
     $local['health_codes'] = '200-399,401';
     expect(checkHealth($local), 'HTTP 401 explicitamente permitido foi rejeitado.');
+    $pdo->prepare('DELETE FROM health_cache WHERE tool_id=?')->execute([$restored['id']]);
+    $staleTool = $restored;
+    $staleTool['health_url'] = 'http://' . $address . '/?code=200';
+    expect(cachedHealth($pdo, $staleTool)['status'] === 'unknown', 'Checagem de uma configuração antiga sobrescreveu o cache atual.');
 } finally {
     proc_terminate($fixture);
     foreach ($pipes as $pipe) fclose($pipe);

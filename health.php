@@ -75,8 +75,8 @@ function cachedHealth(PDO $pdo, array $tool): array {
     }
     $online = checkHealth($tool);
     // UPDATE impede que uma checagem antiga recrie cache apagado ao editar o serviço.
-    $save = $pdo->prepare('UPDATE health_cache SET status=?, checked_at=?, lease_until=0 WHERE tool_id=? AND lease_until=?');
-    $save->execute([$online ? 1 : 0, time(), $id, $lease]);
+    $save = $pdo->prepare('UPDATE health_cache SET status=?, checked_at=?, lease_until=0 WHERE tool_id=? AND lease_until=? AND EXISTS (SELECT 1 FROM tools WHERE id=? AND url=? AND health_method=? AND health_url=? AND health_codes=?)');
+    $save->execute([$online ? 1 : 0, time(), $id, $lease, $id, $tool['url'], $tool['health_method'] ?? 'auto', $tool['health_url'] ?? '', $tool['health_codes'] ?? '200-399']);
     return ['status' => $save->rowCount() ? ($online ? 'ok' : 'error') : 'unknown', 'checked_at' => time()];
 }
 
