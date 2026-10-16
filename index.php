@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (isset($_POST['action']) && $_POST['action'] === 'logout') {
+        $_SESSION = [];
         session_destroy();
         setcookie(session_name(), '', [
             'expires' => time() - 3600,
@@ -193,10 +194,7 @@ foreach ($tools as $tool) {
                             $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
 
                             // Aceita somente a cor hexadecimal gerada pelo seletor do painel.
-                            $toolTagColor = trim((string) ($tool['tag_color'] ?? ''));
-                            if (!preg_match('/^#[0-9a-f]{6}$/i', $toolTagColor)) {
-                                $toolTagColor = '#6366f1';
-                            }
+                            $toolTagColor = validatedColor((string) ($tool['tag_color'] ?? ''), '#6366f1');
 
                             // Define automaticamente texto claro ou escuro para manter o contraste da tag.
                             $tagRed = hexdec(substr($toolTagColor, 1, 2));

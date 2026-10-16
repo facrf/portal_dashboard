@@ -31,7 +31,7 @@ set_exception_handler(function($e) {
     throw $e;
 });
 
-if (!is_dir($dbDir)) { mkdir($dbDir, 0775, true); }
+if (!is_dir($dbDir)) { @mkdir($dbDir, 0775, true); }
 
 $pdo = new PDO("sqlite:" . $dbFile);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

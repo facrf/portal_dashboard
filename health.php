@@ -28,13 +28,19 @@ function checkHealth(array $tool): bool {
     try { $target = healthTarget($tool); } catch (InvalidArgumentException $e) { return false; }
     if ($target['method'] === 'http') {
         $curl = curl_init($target['url']);
-        curl_setopt_array($curl, [
+        $curlOptions = [
             CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 1000,
-            CURLOPT_TIMEOUT_MS => 2000, CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_TIMEOUT_MS => 2000,
             CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_USERAGENT => 'Portal-Dashboard-Health/1.0'
-        ]);
+        ];
+        if (defined('CURLOPT_PROTOCOLS_STR')) {
+            $curlOptions[CURLOPT_PROTOCOLS_STR] = 'http,https';
+        } else {
+            $curlOptions[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+        }
+        curl_setopt_array($curl, $curlOptions);
         curl_exec($curl);
         $code = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         $ok = curl_errno($curl) === 0 && acceptsHttpCode($code, $tool['health_codes'] ?? '200-399');

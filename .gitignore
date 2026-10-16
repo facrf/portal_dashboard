@@ -1,35 +1,54 @@
-#Lixo do VS Code e editores
+# Lixo do VS Code e editores
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 
-#Lixo de S.O.
+# Lixo de S.O.
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-#Ignorar banco de dados Locais
+# Ignorar arquivos de configuracao
+.env
+.env.*
+!.env.example
+
+# Ignorar banco de dados locais
 *.db
 *.sqlite
+*.sqlite3
 *.sql
+*.dump
 *.fdb
 *.mdb
 *.gdb
 *.fbk
 *.gbk
+*.bak
 
-# Ignorar arquivos de configuracao
-.env
-
-# Ignorar icones
-icons/
-!icons/
-icons/*
-!icons/.htaccess
-
-#lixo feito por LLM
-cookie.txt
-*.cookie
-
-# Arquivos auxiliares do SQLite
+# Arquivos auxiliares e locks do SQLite e migrações
 *.db-wal
 *.db-shm
 *.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.migration.lock
+*.lock
+
+# Diretório de dados do banco de dados (ignora dados locais e preserva arquivos base)
+db_data/*
+!db_data/.gitkeep
+!db_data/.htaccess
+
+# Ignorar icones locais (preserva estrutura e regras de seguranca)
+icons/*
+!icons/.gitkeep
+!icons/.htaccess
+
+# Lixo feito por LLM e temporarios
+cookie.txt
+*.cookie
+*.log
+.build-*.log

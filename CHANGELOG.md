@@ -2,6 +2,19 @@
 
 Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo.
 
+## 2026-10-15 — Otimizações de concorrência, compatibilidade e bloqueio de locks
+
+- Aprimorados `.gitignore` e `.dockerignore` para ignorar completamente arquivos de trava de migração (`*.migration.lock`, `*.lock`), locks do SQLite (`*.db-wal`, `*.db-shm`, etc.) e conteúdo gerado de banco de dados local (`db_data/*`), preservando a estrutura base.
+- Bloqueado o acesso web direto a arquivos `*.lock` e `*.migration.lock` no Nginx (`nginx.conf`) e Apache (`.htaccess`).
+- Garantido rollback com tratamento de exceções robusto na transação `BEGIN IMMEDIATE` durante o cadastro do primeiro administrador em `login.php`.
+- Substituído `rand()` por `random_int()` para delay anti-timing contra ataques de força bruta no login.
+- Otimizada a limpeza de tentativas de login expiradas, executando apenas em requisições POST ou periodicamente, evitando travamento de escrita no SQLite durante requisições GET.
+- Limpeza imediata da superglobal `$_SESSION = []` antes de `session_destroy()` no logout em `login.php` e `index.php`.
+- Compatibilizada a checagem HTTP em `health.php` com PHP 8.2+ utilizando `CURLOPT_PROTOCOLS_STR` para prevenir avisos de depreciação de `CURLOPT_PROTOCOLS`.
+- Centralizada a validação e contraste de cor de tags no dashboard através do helper `validatedColor()`.
+- Criação de diretório de banco em `database.php` tornada idempotente e segura contra concorrência entre processos.
+- Comparação estrita com `in_array(..., true)` na seleção de idioma em `i18n.php`.
+
 ## 2026-10-06 — Sessões, monitoramento e importação
 
 - Bloqueado acesso HTTP ao diretório do banco, arquivos auxiliares SQLite e módulos internos.

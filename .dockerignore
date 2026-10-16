@@ -5,17 +5,35 @@
 .dockerignore
 .agents
 .codex
+.vscode/
+.idea/
 
-# Segredos e dados locais
+# Segredos e dados de ambiente
 .env
 .env.*
+
+# Banco de dados e locks locais
+db_data
+db_data/
 *.db
 *.db-wal
 *.db-shm
 *.db-journal
 *.sqlite
 *.sqlite3
-db_data
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sql
+*.dump
+*.fdb
+*.mdb
+*.gdb
+*.fbk
+*.gbk
+*.bak
+*.migration.lock
+*.lock
 
 # A coleção local é opcional e muito grande; imagens de CI devem ser determinísticas.
 icons/*
@@ -26,5 +44,8 @@ icons/*
 *.md
 LICENSE
 
-# Logs temporários de validação
+# Logs temporários de validação e execução
+*.log
 .build-*.log
+cookie.txt
+*.cookie

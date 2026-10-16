@@ -18,6 +18,7 @@ if (!in_array($next, ['admin.php', 'config.php'], true)) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'logout') {
     $logoutToken = $_POST['csrf_token'] ?? null;
     if (is_string($logoutToken) && hash_equals($_SESSION['csrf_token'] ?? '', $logoutToken)) {
+        $_SESSION = [];
         session_destroy();
         setcookie(session_name(), '', [
             'expires' => time() - 3600,
@@ -52,8 +53,10 @@ $settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch();
 $ip = getClientIp();
 $maxAttempts = (int)($settings['brute_max_attempts'] ?? 5);
 $lockoutTime = (int)($settings['brute_lockout_time'] ?? 900);
-$pdo->prepare("DELETE FROM login_attempts WHERE last_attempt < ?")
-    ->execute([time() - max(86400, $lockoutTime * 2)]);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' || random_int(1, 50) === 1) {
+    $pdo->prepare("DELETE FROM login_attempts WHERE last_attempt < ?")
+        ->execute([time() - max(86400, $lockoutTime * 2)]);
+}
 
 $stmt = $pdo->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip = ?");
 $stmt->execute([$ip]);
@@ -103,15 +106,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 validateUsername($username);
                 validatePassword($password, true);
                 $pdo->exec('BEGIN IMMEDIATE');
-                if ((int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 0) {
-                    $pdo->exec('ROLLBACK');
-                    throw new InvalidArgumentException(t('setup_already_done'));
+                try {
+                    if ((int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 0) {
+                        throw new InvalidArgumentException(t('setup_already_done'));
+                    }
+                    $hash = password_hash($password, PASSWORD_BCRYPT);
+                    $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+                    $stmt->execute([$username, $hash]);
+                    $userId = (int) $pdo->lastInsertId();
+                    $pdo->exec('COMMIT');
+                } catch (Throwable $txError) {
+                    try { $pdo->exec('ROLLBACK'); } catch (Throwable $rbError) {}
+                    throw $txError;
                 }
-                $hash = password_hash($password, PASSWORD_BCRYPT);
-                $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
-                $stmt->execute([$username, $hash]);
-                $userId = (int) $pdo->lastInsertId();
-                $pdo->exec('COMMIT');
 
                 startAuthenticatedSession(['id' => $userId, 'username' => $username, 'session_version' => 1]);
                 header('Location: ' . $next);
@@ -144,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([$ip, time()]);
                 
                 // Delay aleatório suave (0.5 a 1s) para mitigar Timing Attacks de varredura
-                usleep(rand(500000, 1000000)); 
+                usleep(random_int(500000, 1000000)); 
                 $error = t('login_invalid');
             }
         }

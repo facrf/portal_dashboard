@@ -6,7 +6,7 @@ $langCode = 'pt';
 $allowedLangs = ['pt', 'es', 'en'];
 try {
     $settingsLang = $pdo->query("SELECT language FROM settings LIMIT 1")->fetchColumn();
-    if ($settingsLang && in_array($settingsLang, $allowedLangs)) { $langCode = $settingsLang; }
+    if ($settingsLang && in_array($settingsLang, $allowedLangs, true)) { $langCode = $settingsLang; }
 } catch (PDOException $e) {}
 
 $langCode = basename($langCode);
