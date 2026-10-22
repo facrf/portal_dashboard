@@ -13,7 +13,8 @@ function normalizeImportedTool(array $tool, string $category, int $position): ar
         'sort_order' => inputInt($tool, 'sort_order', 0, 4999, $position),
         'tag_name' => inputString($tool, 'tag_name', 30),
         'tag_color' => validatedColor(inputString($tool, 'tag_color', 7)),
-        'health_method' => $method, 'health_url' => $healthUrl, 'health_codes' => $codes
+        'health_method' => $method, 'health_url' => $healthUrl, 'health_codes' => $codes,
+        'health_insecure_ssl' => inputInt($tool, 'health_insecure_ssl', 0, 1, 0)
     ];
 }
 
@@ -149,7 +150,7 @@ function applyImportPlan(PDO $pdo, array $plan): void {
             $categoryInsert->execute([$category['name'], $category['sort_order']]);
             $map[$key] = (int) $pdo->lastInsertId();
         }
-        $insert = $pdo->prepare('INSERT INTO tools (category_id, name, url, icon_url, description, sort_order, tag_name, tag_color, health_method, health_url, health_codes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $insert = $pdo->prepare('INSERT INTO tools (category_id, name, url, icon_url, description, sort_order, tag_name, tag_color, health_method, health_url, health_codes, health_insecure_ssl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($plan['tools'] as $tool) {
             $key = $tool['category_key'];
             unset($tool['category_key']);

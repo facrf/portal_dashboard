@@ -54,7 +54,8 @@ function expect(bool $condition, string $message): void {
 
 expect((int) $pdo->query('PRAGMA foreign_keys')->fetchColumn() === 1, 'Foreign keys devem estar habilitadas.');
 expect((int) $pdo->query('PRAGMA busy_timeout')->fetchColumn() === 5000, 'Busy timeout deve ser 5 segundos.');
-expect((int) $pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 3, 'Migração de sessão e monitoramento não registrada.');
+expect(in_array((int) $pdo->query('PRAGMA synchronous')->fetchColumn(), [1, 2], true), 'PRAGMA synchronous deve ser NORMAL ou FULL.');
+expect((int) $pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 4, 'Migração de sessão e monitoramento não registrada.');
 
 $pdo->exec("INSERT INTO categories (name, sort_order) VALUES ('Teste', 0)");
 $categoryId = (int) $pdo->lastInsertId();
@@ -136,7 +137,7 @@ if (!$noSubprocesses) {
         $output = stream_get_contents($workerPipes[1]);
         $errorOutput = stream_get_contents($workerPipes[2]);
         fclose($workerPipes[1]); fclose($workerPipes[2]);
-        expect(proc_close($worker) === 0 && trim($output) === '3' && $errorOutput === '', 'Instalação concorrente falhou: ' . $errorOutput);
+        expect(proc_close($worker) === 0 && trim($output) === '4' && $errorOutput === '', 'Instalação concorrente falhou: ' . $errorOutput);
     }
 
 }
@@ -267,6 +268,12 @@ if (!$noSubprocesses) {
         proc_close($fixture);
     }
 
+    // Teste de snapshot SQLite via VACUUM INTO
+    $backupTest = $testDb . '.backup.test.db';
+    $escaped = str_replace("'", "''", $backupTest);
+    $pdo->exec("VACUUM INTO '$escaped'");
+    expect(is_file($backupTest) && filesize($backupTest) > 0, 'VACUUM INTO falhou ao gerar snapshot.');
+    unlink($backupTest);
 }
 
 testPhase('completed assertions');

@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tagName = inputString($_POST, 'tag_name', 30);
             $tagColor = validatedColor(inputString($_POST, 'tag_color', 7));
             [$healthMethod, $healthUrl, $healthCodes] = validatedHealthSettings($_POST);
+            $healthInsecureSsl = inputInt($_POST, 'health_insecure_ssl', 0, 1, 0);
             require_once __DIR__ . '/health.php';
             healthTarget(['url' => $url, 'health_url' => $healthUrl, 'health_method' => $healthMethod]);
 
@@ -34,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$categoryExists->fetchColumn()) throw new InvalidArgumentException(t('category_missing'));
 
             if ($action === 'add_tool') {
-                $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id, tag_name, tag_color, health_method, health_url, health_codes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$name, $url, $icon, $description, $categoryId, $tagName, $tagColor, $healthMethod, $healthUrl, $healthCodes]);
+                $stmt = $pdo->prepare("INSERT INTO tools (name, url, icon_url, description, category_id, tag_name, tag_color, health_method, health_url, health_codes, health_insecure_ssl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$name, $url, $icon, $description, $categoryId, $tagName, $tagColor, $healthMethod, $healthUrl, $healthCodes, $healthInsecureSsl]);
             } else {
                 $toolId = inputId($_POST, 'tool_id');
-                $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=?, tag_name=?, tag_color=?, health_method=?, health_url=?, health_codes=? WHERE id=?");
-                $stmt->execute([$name, $url, $icon, $description, $categoryId, $tagName, $tagColor, $healthMethod, $healthUrl, $healthCodes, $toolId]);
+                $stmt = $pdo->prepare("UPDATE tools SET name=?, url=?, icon_url=?, description=?, category_id=?, tag_name=?, tag_color=?, health_method=?, health_url=?, health_codes=?, health_insecure_ssl=? WHERE id=?");
+                $stmt->execute([$name, $url, $icon, $description, $categoryId, $tagName, $tagColor, $healthMethod, $healthUrl, $healthCodes, $healthInsecureSsl, $toolId]);
                 $pdo->prepare("DELETE FROM health_cache WHERE tool_id = ?")->execute([$toolId]);
             }
             header("Location: admin.php"); exit;
@@ -213,6 +214,13 @@ $currentLang = $settings['language'] ?? 'pt';
                         <label for="health_codes"><?= t('health_codes') ?></label>
                         <input id="health_codes" name="health_codes" type="text" maxlength="100" value="<?= htmlspecialchars($editTool['health_codes'] ?? '200-399', ENT_QUOTES, 'UTF-8') ?>">
                         <small><?= t('health_codes_help') ?></small>
+                    </div>
+                    <div class="form-group" style="margin-top: 0.5rem;">
+                        <label for="health_insecure_ssl" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input id="health_insecure_ssl" type="checkbox" name="health_insecure_ssl" value="1" <?= !empty($editTool['health_insecure_ssl']) ? 'checked' : '' ?>>
+                            <span><?= t('health_insecure_ssl') ?></span>
+                        </label>
+                        <small><?= t('health_insecure_ssl_help') ?></small>
                     </div>
                 </fieldset>
 

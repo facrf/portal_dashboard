@@ -23,8 +23,9 @@
 
 * 🚀 **Instant Startup:** No heavy databases or complex setup processes.
 * 📶 **Smart Monitoring:** The dashboard automatically tests in real-time whether your services are online, validating both HTTP requests and direct connections to local IPs or (TCP/NTP) ports.
-* 📱 **Responsive Design:** Access and manage your homelab perfectly from your computer, tablet, or phone.
-* 💾 **Simple Persistence:** Settings stored locally in a single-file SQLite database.
+* 📱 **Responsive Design & PWA:** Access from computer, tablet, or phone, with Progressive Web App support for home screen installation.
+* ⚡ **Fast Search Shortcut:** Press `/` or `Ctrl+K` anytime to filter services instantly.
+* 💾 **Simple Persistence & Backups:** Single-file SQLite storage with JSON exports and safe binary snapshots (`VACUUM INTO`).
 * 🎨 **Highly Customizable:** Create categories, add service links, and organize the layout according to your needs.
 * 🔒 **Total Privacy:** 100% self-hosted fonts and assets. No third-party API calls (like Google Fonts).
 
@@ -152,7 +153,7 @@ Created with ☕ by **facrf**.
 
 ## Monitoring, sessions and imports
 
-Services support `auto`, `http`, `tcp` and `ntp` checks, a monitoring target separate from the card link, and accepted HTTP codes. HTTP defaults to `200-399`; use `200-399,401,403` for services that require authentication. Checks use HEAD, do not follow redirects and verify TLS certificates. HTTPS on port 8443 stays HTTPS. TCP checks connection establishment; NTP validates server mode and stratum 1–15. Automatic `udp://` targets are NTP; other UDP protocols are unsupported.
+Services support `auto`, `http`, `tcp` and `ntp` checks, a monitoring target separate from the card link, and accepted HTTP codes. HTTP defaults to `200-399`; use `200-399,401,403` for services that require authentication. Checks use HEAD, do not follow redirects and verify TLS certificates by default (homelab services with self-signed certificates can check the ignore SSL option or set `PORTAL_HEALTH_INSECURE_SSL=true`). HTTPS on port 8443 stays HTTPS. TCP checks connection establishment; NTP validates server mode and stratum 1–15. Automatic `udp://` targets are NTP; other UDP protocols are unsupported.
 
 The shared cache lasts 45 seconds, including legacy endpoints. An eight-second reservation prevents duplicate checks. The browser runs at most two batches of five services concurrently. Portal request failures appear as **unknown**. Indicators update when the page loads; reload to refresh them.
 
@@ -172,4 +173,4 @@ CI validates pull requests. Main pushes, releases and manual runs validate befor
 
 Run the PHP and JavaScript checks and the HTTP integration suite as documented in [README.md](README.md#desenvolvimento-e-publicação). The HTTP suite must target a disposable container with an empty database: it creates accounts, changes passwords and restores test services. The PHP suite removes its temporary database automatically.
 
-The Docker image uses PHP 8.4 and includes the required extensions; standalone installations require PHP 8.1+.
+The Docker image uses PHP 8.5 (8.5.12+) and includes the required extensions; standalone installations require PHP 8.1+.

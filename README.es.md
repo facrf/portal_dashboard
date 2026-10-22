@@ -23,8 +23,9 @@ El **Portal Dashboard** es una alternativa minimalista y segura a herramientas c
 
 * 🚀 **Inicio Instantáneo:** Sin bases de datos pesadas ni procesos de configuración complejos.
 * 📶 **Monitoreo Inteligente:** El panel prueba automáticamente y en tiempo real si tus servicios están en línea, validando tanto solicitudes HTTP como conexiones directas a IPs o puertos (TCP/NTP) locales.
-* 📱 **Diseño Responsivo:** Accede y gestiona tu homelab perfectamente desde tu ordenador, tableta o móvil.
-* 💾 **Persistencia Simple:** Configuraciones almacenadas localmente en una base de datos SQLite de un solo archivo.
+* 📱 **Diseño Responsivo y PWA:** Accede desde ordenador, tableta o móvil, con soporte para Progressive Web App e instalación en pantalla de inicio.
+* ⚡ **Búsqueda Rápida con Atajo:** Pulsa `/` o `Ctrl+K` en cualquier momento para filtrar servicios al instante.
+* 💾 **Persistencia Simple y Copias:** Almacenamiento en SQLite de un solo archivo con exportación JSON e instantáneas binarias seguras (`VACUUM INTO`).
 * 🎨 **Altamente Personalizable:** Crea categorías, añade enlaces de servicios y organiza el diseño según tus necesidades.
 * 🔒 **Privacidad Total:** Fuentes y recursos 100% alojados localmente. Sin llamadas a APIs de terceros (como Google Fonts).
 
@@ -152,7 +153,7 @@ Creado con ☕ por **facrf**.
 
 ## Monitoreo, sesiones e importación
 
-Cada servicio admite verificaciones `auto`, `http`, `tcp` y `ntp`, un destino separado del enlace y códigos HTTP aceptados. El valor predeterminado es `200-399`; use `200-399,401,403` para servicios con autenticación. HTTP utiliza HEAD, no sigue redirecciones y valida los certificados TLS. HTTPS en el puerto 8443 sigue siendo HTTPS. TCP comprueba la conexión; NTP valida el modo servidor y stratum 1–15. En modo automático, `udp://` representa NTP; no se admiten otros protocolos UDP.
+Cada servicio admite verificaciones `auto`, `http`, `tcp` y `ntp`, un destino separado del enlace y códigos HTTP aceptados. El valor predeterminado es `200-399`; use `200-399,401,403` para servicios con autenticación. HTTP utiliza HEAD, no sigue redirecciones y valida los certificados TLS por defecto (los servicios de homelab con certificados autofirmados pueden marcar la opción de ignorar SSL o definir la variable `PORTAL_HEALTH_INSECURE_SSL=true`). HTTPS en el puerto 8443 sigue siendo HTTPS. TCP comprueba la conexión; NTP valida el modo servidor y stratum 1–15. En modo automático, `udp://` representa NTP; no se admiten otros protocolos UDP.
 
 La caché compartida dura 45 segundos, incluidos los endpoints antiguos. Una reserva de ocho segundos evita verificaciones duplicadas. El navegador ejecuta como máximo dos lotes simultáneos de cinco servicios. Los fallos de consulta aparecen como **indeterminado**. Los indicadores se actualizan al cargar la página; recárguela para actualizar.
 
@@ -172,4 +173,4 @@ CI valida pull requests. Los pushes a main, releases y ejecuciones manuales vali
 
 Ejecute las pruebas PHP, JavaScript y HTTP según [README.md](README.md#desenvolvimento-e-publicação). La suite HTTP requiere un contenedor descartable con banco vacío: crea usuarios, cambia contraseñas y restaura servicios de prueba. La suite PHP elimina su banco temporal automáticamente.
 
-La imagen Docker usa PHP 8.4 e incluye las extensiones necesarias; instalaciones propias requieren PHP 8.1+.
+La imagen Docker usa PHP 8.5 (8.5.12+) e incluye las extensiones necesarias; instalaciones propias requieren PHP 8.1+.

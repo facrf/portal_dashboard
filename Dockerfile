@@ -1,5 +1,5 @@
 # Imagem Alpine com PHP-FPM.
-FROM php:8.4-fpm-alpine
+FROM php:8.5-fpm-alpine
 
 ENV PORTAL_DB_PATH=/var/www/db_data/bd.db
 

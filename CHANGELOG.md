@@ -2,6 +2,20 @@
 
 Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo.
 
+## 2026-10-22 — Atualização para PHP 8.5, melhorias de segurança, performance e homelab
+
+- Base Docker atualizada para PHP 8.5 (`php:8.5-fpm-alpine`, PHP 8.5.12).
+- Removida chamada redundante a `curl_close()` em `health.php`, eliminando avisos de depreciação do PHP 8.5 (gerenciamento automático de ciclo de vida pelo garbage collector desde o PHP 8.0).
+- Configurado OPcache dedicado e otimizado em `php-security.ini` para alta performance e baixo consumo de memória em hardware modesto (ex: Raspberry Pi).
+- Otimização do SQLite com `PRAGMA synchronous = NORMAL` em modo WAL, reduzindo operações síncronas de I/O em disco preservando durabilidade.
+- Migração 4 adiciona suporte a certificados SSL autoassinados no monitoramento de saúde (`health_insecure_ssl`), com suporte também via variável de ambiente `PORTAL_HEALTH_INSECURE_SSL` para ambientes homelab.
+- Monitoramento concorrente de múltiplos serviços HTTP via `curl_multi` no endpoint de status em lote, acelerando a carga inicial do dashboard.
+- Adicionada opção de download de snapshot binário online do SQLite via `VACUUM INTO` em `config.php`, garantindo backup consistente sem bloqueio do WAL.
+- Suporte a PWA (Progressive Web App) com `manifest.webmanifest` e meta tags para instalação na tela inicial em dispositivos móveis e desktops.
+- Atalho de teclado para pesquisa rápida de serviços (`/` ou `Ctrl+K` / `Cmd+K` para focar; `Esc` para desfocar).
+- Reforço de segurança no Nginx com cabeçalho `Content-Security-Policy` estrito e rate limiting (`limit_req_zone`) no `/login.php`.
+- Mantida compatibilidade com PHP 8.1+ para instalações manuais.
+
 ## 2026-10-15 — Otimizações de concorrência, compatibilidade e bloqueio de locks
 
 - Aprimorados `.gitignore` e `.dockerignore` para ignorar completamente arquivos de trava de migração (`*.migration.lock`, `*.lock`), locks do SQLite (`*.db-wal`, `*.db-shm`, etc.) e conteúdo gerado de banco de dados local (`db_data/*`), preservando a estrutura base.

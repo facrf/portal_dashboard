@@ -38,6 +38,7 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $pdo->exec('PRAGMA foreign_keys = ON');
 $pdo->exec('PRAGMA busy_timeout = 5000');
+$pdo->exec('PRAGMA synchronous = NORMAL');
 
 function addColumnIfNotExists($pdo, $table, $column, $definition) {
     $stmt = $pdo->query("PRAGMA table_info($table)");
@@ -48,7 +49,7 @@ function addColumnIfNotExists($pdo, $table, $column, $definition) {
 
 // Instalação/migração é serializada entre processos que compartilham o banco.
 $hasMigrations = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")->fetchColumn();
-$needsMigration = $pdo->query('PRAGMA journal_mode')->fetchColumn() !== 'wal' || !$hasMigrations || (int) $pdo->query('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')->fetchColumn() < 3;
+$needsMigration = $pdo->query('PRAGMA journal_mode')->fetchColumn() !== 'wal' || !$hasMigrations || (int) $pdo->query('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')->fetchColumn() < 4;
 if ($needsMigration) {
     $migrationLock = fopen($dbFile . '.migration.lock', 'c');
     if ($migrationLock === false || !flock($migrationLock, LOCK_EX)) throw new RuntimeException('Não foi possível reservar a migração.');
@@ -175,6 +176,19 @@ if ($needsMigration) {
                 addColumnIfNotExists($pdo, 'tools', 'health_codes', "TEXT NOT NULL DEFAULT '200-399'");
                 addColumnIfNotExists($pdo, 'health_cache', 'lease_until', 'INTEGER NOT NULL DEFAULT 0');
                 $pdo->prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (3, ?)")->execute([time()]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+        }
+
+        // Migração de SSL configurável para monitoramento homelab.
+        if ((int) $pdo->query("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")->fetchColumn() < 4) {
+            $pdo->beginTransaction();
+            try {
+                addColumnIfNotExists($pdo, 'tools', 'health_insecure_ssl', 'INTEGER NOT NULL DEFAULT 0');
+                $pdo->prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (4, ?)")->execute([time()]);
                 $pdo->commit();
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();

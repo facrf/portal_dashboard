@@ -18,6 +18,21 @@
         region.textContent = text;
         region.classList.toggle('failed', failed);
     }
+    if (typeof document.addEventListener === 'function') {
+        document.addEventListener('keydown', (e) => {
+            const isSearchShortcut = e.key === '/' || ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K'));
+            if (isSearchShortcut && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+                const search = document.getElementById('searchInput');
+                if (search) {
+                    e.preventDefault();
+                    search.focus();
+                    search.select?.();
+                }
+            } else if (e.key === 'Escape' && document.activeElement?.id === 'searchInput') {
+                document.activeElement.blur();
+            }
+        });
+    }
     window.Portal = {
         createOrderController(containers, endpoint, action, selector) {
             const snapshot = () => containers.map(container => Array.from(container.children));

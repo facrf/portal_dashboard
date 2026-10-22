@@ -2,6 +2,11 @@
 <?php $favicon = resolveIconUrl($settings['favicon'] ?? ''); if ($favicon !== ''): ?>
 <link rel="icon" href="<?= $favicon ?>">
 <?php endif; ?>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="<?= validatedColor((string) ($settings['bg_color'] ?? ''), '#1e1e2e') ?>">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
 <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/../style.css') ?>">
 <style>

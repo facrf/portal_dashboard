@@ -23,8 +23,9 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 
 * 🚀 **Inicialização Instantânea:** Sem bancos de dados pesados ou processos de setup complexos.
 * 📶 **Monitoramento Inteligente:** O painel testa automaticamente e em tempo real se seus serviços estão online, validando tanto requisições HTTP quanto conexões diretas a IPs ou portas (TCP/NTP) locais.
-* 📱 **Design Responsivo:** Acesse e gerencie seu homelab perfeitamente pelo computador, tablet ou celular.
-* 💾 **Persistência Simples:** Configurações armazenadas localmente em um banco de dados SQLite de arquivo único.
+* 📱 **Design Responsivo e PWA:** Acesse pelo computador, tablet ou celular, com suporte a Progressive Web App para instalação direta na tela inicial.
+* ⚡ **Pesquisa Rápida com Atalho:** Pressione `/` ou `Ctrl+K` a qualquer momento para filtrar serviços instantaneamente.
+* 💾 **Persistência Simples e Backups:** Configurações em SQLite de arquivo único, com exportação JSON e snapshots binários seguros (`VACUUM INTO`).
 * 🎨 **Altamente Customizável:** Crie categorias, adicione links de serviços e organize o layout de acordo com sua necessidade.
 * 🔒 **Privacidade Total:** Fontes e recursos 100% hospedados localmente. Sem chamadas para APIs de terceiros (como Google Fonts).
 
@@ -165,7 +166,7 @@ Criado com ☕ por **facrf**.
 
 ## Monitoramento, sessões e importação
 
-Cada serviço pode configurar um método (`auto`, `http`, `tcp`, `ntp`), um destino de monitoramento separado do link e os códigos HTTP aceitos. O padrão HTTP é `200-399`; para serviços que respondem com autenticação, use por exemplo `200-399,401,403`. A verificação HTTP usa HEAD, não segue redirecionamentos e valida o certificado TLS. HTTPS em portas como 8443 continua sendo verificado por HTTPS. TCP verifica a abertura da conexão; NTP exige resposta válida, com modo servidor e stratum de 1 a 15. No modo automático, `udp://` é tratado como NTP; outros protocolos UDP não são suportados.
+Cada serviço pode configurar um método (`auto`, `http`, `tcp`, `ntp`), um destino de monitoramento separado do link e os códigos HTTP aceitos. O padrão HTTP é `200-399`; para serviços que respondem com autenticação, use por exemplo `200-399,401,403`. A verificação HTTP usa HEAD, não segue redirecionamentos e valida o certificado TLS por padrão (serviços com certificados autoassinados em homelab podem marcar para ignorar erros SSL ou definir a variável `PORTAL_HEALTH_INSECURE_SSL=true`). HTTPS em portas como 8443 continua sendo verificado por HTTPS. TCP verifica a abertura da conexão; NTP exige resposta válida, com modo servidor e stratum de 1 a 15. No modo automático, `udp://` é tratado como NTP; outros protocolos UDP não são suportados.
 
 O cache dura 45 segundos e é compartilhado pelos endpoints atuais e antigos. Uma reserva de até 8 segundos impede verificações simultâneas do mesmo serviço. O navegador usa no máximo dois lotes simultâneos, com até cinco serviços por lote. Falhas na consulta do portal aparecem como **indeterminado**, sem afirmar que o serviço está offline. Os indicadores são atualizados ao carregar a página; recarregue para consultar novamente.
 
@@ -199,4 +200,4 @@ docker stop portal-integration
 
 Execute o teste HTTP exclusivamente contra um contêiner descartável com banco vazio: ele cria usuários, altera senhas e restaura serviços de teste. As suítes PHP removem o próprio banco temporário ao terminar.
 
-A imagem Docker usa PHP 8.4 e inclui as extensões necessárias; instalações próprias exigem PHP 8.1+.
+A imagem Docker usa PHP 8.5 (8.5.12+) e inclui as extensões necessárias; instalações próprias exigem PHP 8.1+.

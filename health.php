@@ -28,11 +28,13 @@ function checkHealth(array $tool): bool {
     try { $target = healthTarget($tool); } catch (InvalidArgumentException $e) { return false; }
     if ($target['method'] === 'http') {
         $curl = curl_init($target['url']);
+        $insecureSsl = !empty($tool['health_insecure_ssl'])
+            || in_array(strtolower((string) getenv('PORTAL_HEALTH_INSECURE_SSL')), ['1', 'true', 'yes'], true);
         $curlOptions = [
             CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 1000,
             CURLOPT_TIMEOUT_MS => 2000,
-            CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_SSL_VERIFYPEER => !$insecureSsl, CURLOPT_SSL_VERIFYHOST => $insecureSsl ? 0 : 2,
             CURLOPT_USERAGENT => 'Portal-Dashboard-Health/1.0'
         ];
         if (defined('CURLOPT_PROTOCOLS_STR')) {
@@ -44,7 +46,6 @@ function checkHealth(array $tool): bool {
         curl_exec($curl);
         $code = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         $ok = curl_errno($curl) === 0 && acceptsHttpCode($code, $tool['health_codes'] ?? '200-399');
-        curl_close($curl);
         return $ok;
     }
     $host = strpos($target['host'], ':') !== false ? '[' . $target['host'] . ']' : $target['host'];
@@ -86,6 +87,100 @@ function cachedHealth(PDO $pdo, array $tool): array {
     return ['status' => $save->rowCount() ? ($online ? 'ok' : 'error') : 'unknown', 'checked_at' => time()];
 }
 
+function batchCachedHealth(PDO $pdo, array $tools): array {
+    $now = time();
+    $results = [];
+    $toCheck = [];
+    $read = $pdo->prepare('SELECT status, checked_at FROM health_cache WHERE tool_id = ?');
+    $claim = $pdo->prepare('INSERT INTO health_cache (tool_id, status, checked_at, lease_until) VALUES (?, 0, 0, ?)
+        ON CONFLICT(tool_id) DO UPDATE SET lease_until=excluded.lease_until
+        WHERE health_cache.checked_at < ? AND health_cache.lease_until <= ?');
+    $lease = $now + 8;
+
+    foreach ($tools as $tool) {
+        $id = (int) $tool['id'];
+        $read->execute([$id]);
+        $cached = $read->fetch();
+        if ($cached && $now - (int) $cached['checked_at'] <= 45) {
+            $results[(string) $id] = ['status' => $cached['status'] ? 'ok' : 'error', 'checked_at' => (int) $cached['checked_at']];
+            continue;
+        }
+        $claim->execute([$id, $lease, $now - 45, $now]);
+        if ($claim->rowCount() === 0) {
+            $results[(string) $id] = ['status' => 'unknown', 'checked_at' => (int) ($cached['checked_at'] ?? 0), 'retry_after' => 3];
+            continue;
+        }
+        $toCheck[$id] = $tool;
+    }
+
+    if (!$toCheck) return $results;
+
+    if (count($toCheck) === 1) {
+        $tool = reset($toCheck);
+        $id = (int) $tool['id'];
+        $online = checkHealth($tool);
+        $save = $pdo->prepare('UPDATE health_cache SET status=?, checked_at=?, lease_until=0 WHERE tool_id=? AND lease_until=? AND EXISTS (SELECT 1 FROM tools WHERE id=? AND url=? AND health_method=? AND health_url=? AND health_codes=?)');
+        $save->execute([$online ? 1 : 0, time(), $id, $lease, $id, $tool['url'], $tool['health_method'] ?? 'auto', $tool['health_url'] ?? '', $tool['health_codes'] ?? '200-399']);
+        $results[(string) $id] = ['status' => $save->rowCount() ? ($online ? 'ok' : 'error') : 'unknown', 'checked_at' => time()];
+        return $results;
+    }
+
+    $mh = curl_multi_init();
+    $curlHandles = [];
+    $checkResults = [];
+
+    foreach ($toCheck as $id => $tool) {
+        try { $target = healthTarget($tool); } catch (InvalidArgumentException $e) { $checkResults[$id] = false; continue; }
+        if ($target['method'] === 'http') {
+            $ch = curl_init($target['url']);
+            $insecureSsl = !empty($tool['health_insecure_ssl'])
+                || in_array(strtolower((string) getenv('PORTAL_HEALTH_INSECURE_SSL')), ['1', 'true', 'yes'], true);
+            $curlOptions = [
+                CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 1000,
+                CURLOPT_TIMEOUT_MS => 2000,
+                CURLOPT_SSL_VERIFYPEER => !$insecureSsl, CURLOPT_SSL_VERIFYHOST => $insecureSsl ? 0 : 2,
+                CURLOPT_USERAGENT => 'Portal-Dashboard-Health/1.0'
+            ];
+            if (defined('CURLOPT_PROTOCOLS_STR')) {
+                $curlOptions[CURLOPT_PROTOCOLS_STR] = 'http,https';
+            } else {
+                $curlOptions[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+            }
+            curl_setopt_array($ch, $curlOptions);
+            curl_multi_add_handle($mh, $ch);
+            $curlHandles[$id] = $ch;
+        } else {
+            $checkResults[$id] = checkHealth($tool);
+        }
+    }
+
+    if ($curlHandles) {
+        $running = null;
+        do {
+            $mrc = curl_multi_exec($mh, $running);
+            if ($running) curl_multi_select($mh, 0.1);
+        } while ($running > 0 && $mrc === CURLM_OK);
+
+        foreach ($curlHandles as $id => $ch) {
+            $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $checkResults[$id] = curl_errno($ch) === 0 && acceptsHttpCode($code, $toCheck[$id]['health_codes'] ?? '200-399');
+            curl_multi_remove_handle($mh, $ch);
+        }
+        curl_multi_close($mh);
+    }
+
+    $save = $pdo->prepare('UPDATE health_cache SET status=?, checked_at=?, lease_until=0 WHERE tool_id=? AND lease_until=? AND EXISTS (SELECT 1 FROM tools WHERE id=? AND url=? AND health_method=? AND health_url=? AND health_codes=?)');
+    $checkTime = time();
+    foreach ($toCheck as $id => $tool) {
+        $online = $checkResults[$id] ?? false;
+        $save->execute([$online ? 1 : 0, $checkTime, $id, $lease, $id, $tool['url'], $tool['health_method'] ?? 'auto', $tool['health_url'] ?? '', $tool['health_codes'] ?? '200-399']);
+        $results[(string) $id] = ['status' => $save->rowCount() ? ($online ? 'ok' : 'error') : 'unknown', 'checked_at' => $checkTime];
+    }
+
+    return $results;
+}
+
 function handleHealthRequest(PDO $pdo): void {
     $action = is_string($_GET['action'] ?? null) ? $_GET['action'] : '';
     if (!in_array($action, ['ping', 'status'], true)) return;
@@ -99,8 +194,8 @@ function handleHealthRequest(PDO $pdo): void {
         $ids = array_values(array_unique(array_map('intval', explode(',', $raw))));
         $query = $pdo->prepare('SELECT * FROM tools WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
         $query->execute($ids);
-        $results = [];
-        foreach ($query->fetchAll() as $tool) $results[(string) $tool['id']] = cachedHealth($pdo, $tool);
+        $tools = $query->fetchAll();
+        $results = batchCachedHealth($pdo, $tools);
         jsonResponse(['status' => 'ok', 'results' => $results]);
     }
     // Clientes antigos compartilham o mesmo cache e a configuração do serviço.

@@ -13,6 +13,23 @@ $importError = '';
 if (isset($_SESSION['import_preview']) && time() - $_SESSION['import_preview']['created_at'] > 600) unset($_SESSION['import_preview']);
 
 // ==========================================
+// EXPORTAÇÃO COMPLETA SQLITE (VACUUM INTO)
+// ==========================================
+if (isset($_GET['download_sqlite'])) {
+    $tmpBackup = tempnam(sys_get_temp_dir(), 'portal_sqlite_');
+    if ($tmpBackup === false) throw new RuntimeException('Falha ao criar arquivo temporário.');
+    @unlink($tmpBackup);
+    $escaped = str_replace("'", "''", $tmpBackup);
+    $pdo->exec("VACUUM INTO '$escaped'");
+    header('Content-Type: application/vnd.sqlite3');
+    header('Content-Disposition: attachment; filename="portal_database_' . date('Y-m-d_H-i') . '.db"');
+    header('Content-Length: ' . filesize($tmpBackup));
+    readfile($tmpBackup);
+    @unlink($tmpBackup);
+    exit;
+}
+
+// ==========================================
 // PROCESSAMENTO DE FORMULÁRIOS (POST)
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -305,11 +322,14 @@ $currentLang = $settings['language'] ?? 'pt';
     <h3 style="margin-top:0;">📦 <?= t('Exportar Backup') ?></h3>
     <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1.5rem;"><?= t('backup_help') ?></p>
     
-    <form method="POST" action="config.php" style="margin: 0;">
+    <form method="POST" action="config.php" style="margin: 0 0 1.5rem 0;">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="action" value="export">
         <button type="submit" class="btn"><?= t('Download Backup (JSON)') ?></button>
     </form>
+
+    <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;"><?= t('backup_sqlite_help') ?></p>
+    <a href="config.php?download_sqlite=1" class="btn"><?= t('download_sqlite_backup') ?></a>
 </div>
 
                 <!-- Box Importar -->
