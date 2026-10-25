@@ -184,4 +184,7 @@ return [
     'import_empty' => 'No hay servicios válidos para importar.',
     'ids_invalid' => 'Lista de servicios inválida.',
     'target_missing' => 'Destino no registrado.',
+    'welcome_title' => 'Bienvenido a Portal Dashboard',
+    'welcome_subtitle' => 'No hay servicios registrados aún. Comience agregando sus servicios o importando una copia de seguridad.',
+    'clear_search' => 'Limpiar búsqueda',
 ];

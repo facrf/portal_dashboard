@@ -2,6 +2,29 @@
 
 Todas as mudanças relevantes do Portal Dashboard são registradas neste arquivo.
 
+## 2026-10-25 — Otimização de performance, segurança, busca avançada e resiliência homelab
+
+- Centralizado o carregamento de configurações (`settings`) no bootstrap (`database.php`), eliminando consultas SQL redundantes em `i18n.php`, `auth.php`, `index.php`, `admin.php` e `config.php`.
+- Otimização do SQLite com `PRAGMA temp_store = MEMORY`, reduzindo operações de escrita em disco em cartões SD e mídias flash.
+- Corrigido potencial busy-waiting de CPU (100% de uso) em `health.php` quando `curl_multi_select` retorna `-1`, adicionando pausa controlada com `usleep`.
+- Adicionado cache estático HTTP longo para CSS, JS, manifest, imagens e fontes WOFF2 no Nginx (`nginx.conf`) e Apache (`.htaccess`).
+- Otimizado tratamento de `/favicon.ico` no Nginx com resposta direta para evitar execução desnecessária do PHP-FPM quando inexistente.
+- Prevenção de timing attack avançado no login (`login.php`) com avaliação de custo computacional uniforme via bcrypt mesmo para usuários inexistentes.
+- Aprimorada a segurança do snapshot SQLite (`config.php`) com suporte nativo a `POST` e validação de token CSRF, alinhando com a exportação JSON.
+- Resiliência aumentada em `entrypoint.sh` para volumes em storages de rede (NFS, SMB/CIFS) tolerando montagens onde `chown` não é permitido.
+- Busca do dashboard aprimorada no `index.php`: agora filtra também por tags e URLs/IPs/portas locais, com atalho de teclado inteligente (`Esc` limpa o filtro e desfaz a busca) e botão visual de limpar campo.
+- Adicionado estado vazio ("Empty State") elegante com boas-vindas e atalhos rápidos quando não há serviços cadastrados no dashboard.
+- Cálculo de contraste luminotécnico dinâmico estendido para tags no painel administrativo (`admin.php`), garantindo legibilidade com cores claras.
+- Eliminação do piscar escuro (FOUC) para usuários de tema claro através de script inline preventivo no `<head>`.
+- Chaves de tradução adicionadas e sincronizadas em português, inglês e espanhol (`lang/*.php`).
+- Adicionado ícone vetorial SVG nativo (`assets/icon.svg`) e suporte completo a PWA/Apple Touch Icon em `manifest.webmanifest` e templates, garantindo exibição nítida em qualquer resolução.
+- Atalho `Enter` na caixa de busca para abrir automaticamente o primeiro serviço correspondente sem necessidade do mouse.
+- Otimização do widget de relógio no dashboard para evitar mutações de DOM e chamadas a `toLocaleDateString` a cada segundo, atualizando apenas na virada de minuto.
+- Feedback tátil com estado `:active` nos cards de serviços para melhor resposta em dispositivos touch e desktop.
+- Criação de `robots.txt`, cabeçalho HTTP `X-Robots-Tag: noindex, nofollow, noarchive` e meta tags preventivas para proteger homelabs de indexação indesejada por bots ou buscadores quando expostos via túnel.
+- Badge indicador de quantidade de serviços em cada categoria do dashboard com posicionamento alinhado.
+- Tratamento de falhas de carregamento de ícones remotos ou locais (`onerror`), ocultando suavemente elementos vazios sem desalinhar os cards.
+
 ## 2026-10-22 — Atualização para PHP 8.5, melhorias de segurança, performance e homelab
 
 - Base Docker atualizada para PHP 8.5 (`php:8.5-fpm-alpine`, PHP 8.5.12).

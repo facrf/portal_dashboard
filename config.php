@@ -16,6 +16,11 @@ if (isset($_SESSION['import_preview']) && time() - $_SESSION['import_preview']['
 // EXPORTAÇÃO COMPLETA SQLITE (VACUUM INTO)
 // ==========================================
 if (isset($_GET['download_sqlite'])) {
+    $token = $_GET['csrf_token'] ?? null;
+    if (!is_string($token) || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
+        http_response_code(403);
+        die(htmlspecialchars(t('csrf_invalid'), ENT_QUOTES, 'UTF-8'));
+    }
     $tmpBackup = tempnam(sys_get_temp_dir(), 'portal_sqlite_');
     if ($tmpBackup === false) throw new RuntimeException('Falha ao criar arquivo temporário.');
     @unlink($tmpBackup);
@@ -53,6 +58,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
         header('Content-Disposition: attachment; filename="portal_backup_' . date('Y-m-d_H-i') . '.json"');
         echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if (isset($_POST['action']) && $_POST['action'] === 'download_sqlite') {
+        $tmpBackup = tempnam(sys_get_temp_dir(), 'portal_sqlite_');
+        if ($tmpBackup === false) throw new RuntimeException('Falha ao criar arquivo temporário.');
+        @unlink($tmpBackup);
+        $escaped = str_replace("'", "''", $tmpBackup);
+        $pdo->exec("VACUUM INTO '$escaped'");
+        header('Content-Type: application/vnd.sqlite3');
+        header('Content-Disposition: attachment; filename="portal_database_' . date('Y-m-d_H-i') . '.db"');
+        header('Content-Length: ' . filesize($tmpBackup));
+        readfile($tmpBackup);
+        @unlink($tmpBackup);
         exit;
     }
     
@@ -329,7 +348,11 @@ $currentLang = $settings['language'] ?? 'pt';
     </form>
 
     <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;"><?= t('backup_sqlite_help') ?></p>
-    <a href="config.php?download_sqlite=1" class="btn"><?= t('download_sqlite_backup') ?></a>
+    <form method="POST" action="config.php" style="margin: 0;">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="action" value="download_sqlite">
+        <button type="submit" class="btn"><?= t('download_sqlite_backup') ?></button>
+    </form>
 </div>
 
                 <!-- Box Importar -->

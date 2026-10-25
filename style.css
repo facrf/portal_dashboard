@@ -141,6 +141,27 @@ a {
     fill: var(--input-focus-border);
 }
 
+.search-clear-btn {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.search-clear-btn:hover {
+    color: var(--text-color);
+    background: rgba(255, 255, 255, 0.1);
+}
+
 /* Header Controls & Navigation */
 .header-controls {
     display: flex;
@@ -269,6 +290,26 @@ input[type="color"]::-webkit-color-swatch {
     border-radius: 50%;
     background: var(--input-focus-border);
     box-shadow: 0 0 8px var(--input-focus-border);
+    flex-shrink: 0;
+}
+
+.category-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    letter-spacing: normal;
+    margin-left: auto;
+    margin-right: 0.6rem;
+}
+
+body.light-theme .category-count {
+    background: rgba(15, 23, 42, 0.05);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: var(--text-muted);
 }
 
 .category-items {
@@ -303,6 +344,11 @@ input[type="color"]::-webkit-color-swatch {
     border-color: var(--card-border-hover);
     transform: translateY(-4px) scale(1.01);
     box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.35), 0 0 12px var(--accent-glow);
+}
+
+.card:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 0.1s;
 }
 
 .card-top {
@@ -758,6 +804,7 @@ tr:hover td {
 /* =========================================== */
 /* LIGHT THEME OVERRIDES (Ultra-Clean & Sleek) */
 /* =========================================== */
+html.light-theme,
 body.light-theme {
     color-scheme: light;
     --text-color: #0f172a !important;

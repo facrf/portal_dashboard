@@ -8,7 +8,8 @@ PORTAL_DB_DIR="$(dirname "$PORTAL_DB_PATH")"
 mkdir -p "$PORTAL_DB_DIR" /var/www/html/icons
 
 # Garante permissões para o processo PHP-FPM (www-data).
-chown -R www-data:www-data "$PORTAL_DB_DIR"
+# Ignora falhas caso o diretório esteja em montagem de rede (NFS/CIFS/SMB) sem permissão de chown.
+chown -R www-data:www-data "$PORTAL_DB_DIR" 2>/dev/null || true
 # Ícones são apenas lidos pela aplicação; volumes podem ser montados como somente leitura.
 
 exec "$@"

@@ -24,7 +24,7 @@ O **Portal Dashboard** é uma alternativa minimalista e segura a ferramentas com
 * 🚀 **Inicialização Instantânea:** Sem bancos de dados pesados ou processos de setup complexos.
 * 📶 **Monitoramento Inteligente:** O painel testa automaticamente e em tempo real se seus serviços estão online, validando tanto requisições HTTP quanto conexões diretas a IPs ou portas (TCP/NTP) locais.
 * 📱 **Design Responsivo e PWA:** Acesse pelo computador, tablet ou celular, com suporte a Progressive Web App para instalação direta na tela inicial.
-* ⚡ **Pesquisa Rápida com Atalho:** Pressione `/` ou `Ctrl+K` a qualquer momento para filtrar serviços instantaneamente.
+* ⚡ **Pesquisa Rápida com Atalho:** Pressione `/` ou `Ctrl+K` a qualquer momento para filtrar serviços instantaneamente por nome, descrição, tags ou endereço/IP (tecla `Esc` ou botão dedicado para limpar).
 * 💾 **Persistência Simples e Backups:** Configurações em SQLite de arquivo único, com exportação JSON e snapshots binários seguros (`VACUUM INTO`).
 * 🎨 **Altamente Customizável:** Crie categorias, adicione links de serviços e organize o layout de acordo com sua necessidade.
 * 🔒 **Privacidade Total:** Fontes e recursos 100% hospedados localmente. Sem chamadas para APIs de terceiros (como Google Fonts).

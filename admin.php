@@ -326,12 +326,18 @@ $currentLang = $settings['language'] ?? 'pt';
                             <tr draggable="true" data-id="<?= $tool['id'] ?>" data-category="<?= (int) $tool['category_id'] ?>" class="draggable-row" style="<?= ($editMode && $editTool['id'] == $tool['id']) ? 'background: rgba(255,255,255,0.05);' : 'cursor: grab;' ?>">
                                 <td>
                                     <?php $resIco = resolveIconUrl($tool['icon_url']); if(!empty($resIco)): ?>
-                                        <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="">
+                                        <img src="<?= $resIco ?>" style="width:32px; height:32px; object-fit:contain" alt="" onerror="this.style.display='none';">
                                     <?php endif; ?>
                                 </td>
                                 <td style="font-weight:bold"><?= htmlspecialchars($tool['name'], ENT_QUOTES, 'UTF-8') ?>
-                                    <?php if (!empty($tool['tag_name'])): ?>
-                                        <span style="background-color: <?= validatedColor((string) $tool['tag_color']) ?>; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 8px;">
+                                    <?php if (!empty($tool['tag_name'])): 
+                                        $adminTagColor = validatedColor((string) ($tool['tag_color'] ?? ''), '#6366f1');
+                                        $adminTagRed = hexdec(substr($adminTagColor, 1, 2));
+                                        $adminTagGreen = hexdec(substr($adminTagColor, 3, 2));
+                                        $adminTagBlue = hexdec(substr($adminTagColor, 5, 2));
+                                        $adminTagTextColor = (($adminTagRed * 299 + $adminTagGreen * 587 + $adminTagBlue * 114) / 1000) > 160 ? '#111827' : '#ffffff';
+                                    ?>
+                                        <span style="background-color: <?= $adminTagColor ?>; color: <?= $adminTagTextColor ?>; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 8px;">
                                             <?= htmlspecialchars($tool['tag_name'], ENT_QUOTES, 'UTF-8') ?>
                                         </span>
                                     <?php endif; ?>

@@ -24,7 +24,7 @@
 * 🚀 **Instant Startup:** No heavy databases or complex setup processes.
 * 📶 **Smart Monitoring:** The dashboard automatically tests in real-time whether your services are online, validating both HTTP requests and direct connections to local IPs or (TCP/NTP) ports.
 * 📱 **Responsive Design & PWA:** Access from computer, tablet, or phone, with Progressive Web App support for home screen installation.
-* ⚡ **Fast Search Shortcut:** Press `/` or `Ctrl+K` anytime to filter services instantly.
+* ⚡ **Fast Search Shortcut:** Press `/` or `Ctrl+K` anytime to filter services instantly by name, description, tags, or address/IP (`Esc` key or clear button to reset).
 * 💾 **Simple Persistence & Backups:** Single-file SQLite storage with JSON exports and safe binary snapshots (`VACUUM INTO`).
 * 🎨 **Highly Customizable:** Create categories, add service links, and organize the layout according to your needs.
 * 🔒 **Total Privacy:** 100% self-hosted fonts and assets. No third-party API calls (like Google Fonts).

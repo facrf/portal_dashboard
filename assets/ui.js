@@ -2,10 +2,17 @@
 (() => {
     const config = JSON.parse(document.getElementById('portal-ui-config').textContent);
     window.toggleTheme = () => {
-        document.body.classList.toggle('light-theme');
-        try { localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark'); } catch (_) { /* Armazenamento opcional. */ }
+        const isLight = document.body.classList.toggle('light-theme');
+        document.documentElement.classList.toggle('light-theme', isLight);
+        try { localStorage.setItem('theme', isLight ? 'light' : 'dark'); } catch (_) { /* Armazenamento opcional. */ }
     };
-    try { if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme'); } catch (_) { /* Tema padrão. */ }
+    try {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+            document.body.classList.add('light-theme');
+            document.documentElement.classList.add('light-theme');
+        }
+    } catch (_) { /* Tema padrão. */ }
     function message(text, failed = false) {
         let region = document.getElementById('save-feedback');
         if (!region) {
@@ -29,7 +36,18 @@
                     search.select?.();
                 }
             } else if (e.key === 'Escape' && document.activeElement?.id === 'searchInput') {
-                document.activeElement.blur();
+                const search = document.activeElement;
+                if (search.value !== '') {
+                    search.value = '';
+                    search.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                search.blur();
+            } else if (e.key === 'Enter' && document.activeElement?.id === 'searchInput') {
+                const visibleCard = Array.from(document.querySelectorAll('.tool-card')).find(c => c.style.display !== 'none');
+                if (visibleCard && visibleCard.href && !visibleCard.href.endsWith('#blocked')) {
+                    e.preventDefault();
+                    visibleCard.click();
+                }
             }
         });
     }

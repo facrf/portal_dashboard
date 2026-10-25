@@ -136,7 +136,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = false; // Bloqueia senhas gigantes para evitar DoS no password_verify
             }
 
-            if ($user && password_verify($password, $user['password'])) {
+            $dummyHash = '$2y$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUU';
+            $hashToVerify = ($user && is_string($user['password'] ?? null)) ? $user['password'] : $dummyHash;
+            $passwordMatches = password_verify($password, $hashToVerify);
+
+            if ($user && $passwordMatches) {
                 
                 // Login com sucesso: reseta os bloqueios do IP e previne Fixação de Sessão
                 $pdo->prepare("DELETE FROM login_attempts WHERE ip = ?")->execute([$ip]);

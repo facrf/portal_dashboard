@@ -184,4 +184,7 @@ return [
     'import_empty' => 'No valid services to import.',
     'ids_invalid' => 'Invalid service list.',
     'target_missing' => 'Target is not registered.',
+    'welcome_title' => 'Welcome to Portal Dashboard',
+    'welcome_subtitle' => 'No services registered yet. Get started by adding your services or importing a backup.',
+    'clear_search' => 'Clear search',
 ];

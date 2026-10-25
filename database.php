@@ -39,6 +39,7 @@ $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $pdo->exec('PRAGMA foreign_keys = ON');
 $pdo->exec('PRAGMA busy_timeout = 5000');
 $pdo->exec('PRAGMA synchronous = NORMAL');
+$pdo->exec('PRAGMA temp_store = MEMORY');
 
 function addColumnIfNotExists($pdo, $table, $column, $definition) {
     $stmt = $pdo->query("PRAGMA table_info($table)");
@@ -200,3 +201,6 @@ if ($needsMigration) {
         fclose($migrationLock);
     }
 }
+
+// Carrega as configurações do portal uma única vez para compartilhamento com i18n, auth e páginas.
+$settings = $pdo->query("SELECT * FROM settings LIMIT 1")->fetch() ?: [];

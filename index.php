@@ -104,6 +104,7 @@ foreach ($tools as $tool) {
             
             <div class="search-container">
                 <input type="text" id="searchInput" aria-label="<?= t('search') ?>" class="search-input" placeholder="<?= htmlspecialchars(t('search'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off">
+                <button type="button" id="searchClear" class="search-clear-btn" aria-label="<?= t('clear_search') ?>" hidden>&times;</button>
                 <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             </div>
 
@@ -152,18 +153,24 @@ foreach ($tools as $tool) {
                 <?php if ($showClock): ?>
                 const hours = String(now.getHours()).padStart(2, '0');
                 const minutes = String(now.getMinutes()).padStart(2, '0');
-                document.getElementById('clock-time').textContent = `${hours}:${minutes}`;
-                
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                document.getElementById('clock-date').textContent = now.toLocaleDateString('<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>', options);
+                const timeStr = `${hours}:${minutes}`;
+                const timeEl = document.getElementById('clock-time');
+                if (timeEl && timeEl.textContent !== timeStr) {
+                    timeEl.textContent = timeStr;
+                    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    const dateEl = document.getElementById('clock-date');
+                    if (dateEl) dateEl.textContent = now.toLocaleDateString('<?= htmlspecialchars($currentLang, ENT_QUOTES, 'UTF-8') ?>', options);
+                }
                 <?php endif; ?>
                 
                 <?php if ($showGreeting): ?>
-                let greeting = <?= json_encode(t('greeting_evening')) ?>;
-                if (now.getHours() >= 5 && now.getHours() < 12) greeting = <?= json_encode(t('greeting_morning')) ?>;
-                else if (now.getHours() >= 12 && now.getHours() < 18) greeting = <?= json_encode(t('greeting_afternoon')) ?>;
-                
-                document.getElementById('clock-greeting').textContent = greeting + <?= json_encode($isAuthenticated ? ', ' . ($settings['greeting_name'] ?? 'Administrador') . '.' : '!') ?>;
+                const greetingEl = document.getElementById('clock-greeting');
+                if (greetingEl && (!greetingEl.textContent || now.getSeconds() === 0)) {
+                    let greeting = <?= json_encode(t('greeting_evening')) ?>;
+                    if (now.getHours() >= 5 && now.getHours() < 12) greeting = <?= json_encode(t('greeting_morning')) ?>;
+                    else if (now.getHours() >= 12 && now.getHours() < 18) greeting = <?= json_encode(t('greeting_afternoon')) ?>;
+                    greetingEl.textContent = greeting + <?= json_encode($isAuthenticated ? ', ' . ($settings['greeting_name'] ?? 'Administrador') . '.' : '!') ?>;
+                }
                 <?php endif; ?>
             }
             setInterval(updateClock, 1000);
@@ -176,12 +183,29 @@ foreach ($tools as $tool) {
             <a id="web-search" class="btn" href="https://duckduckgo.com/" target="_blank" rel="noopener noreferrer"><?= t('search_web') ?></a>
             <p><?= t('search_web_help') ?></p>
         </div>
+
+        <?php if (empty($tools)): ?>
+        <div class="empty-dashboard-card" style="text-align: center; padding: 3rem 2rem; background: var(--card-bg); border-radius: var(--radius-lg); border: 1px solid var(--card-border); max-width: 600px; margin: 2rem auto;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🌐</div>
+            <h2 style="margin-top: 0; color: var(--text-color);"><?= t('welcome_title') ?></h2>
+            <p style="opacity: 0.8; margin-bottom: 2rem;"><?= t('welcome_subtitle') ?></p>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <?php if ($isAuthenticated): ?>
+                    <a href="admin.php" class="btn btn-glow"><?= t('add_service') ?></a>
+                    <a href="config.php#backup-panel" class="btn"><?= t('Importar Dados') ?></a>
+                <?php else: ?>
+                    <a href="login.php?next=admin.php" class="btn btn-glow"><?= t('login_title') ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="dashboard-grid">
             <?php foreach ($categories as $cat): 
                 if (empty($groupedTools[$cat['id']])) continue; 
             ?>
                 <div class="category-column">
-                    <h2><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></h2>
+                    <h2><span><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></span> <span class="category-count" title="<?= count($groupedTools[$cat['id']]) ?> <?= htmlspecialchars(t('services_count'), ENT_QUOTES, 'UTF-8') ?>"><?= count($groupedTools[$cat['id']]) ?></span></h2>
                     <div class="category-items">
                         
                         <?php foreach ($groupedTools[$cat['id']] as $tool): 
@@ -192,6 +216,8 @@ foreach ($tools as $tool) {
                             $safeUrl = htmlspecialchars($safeUrl, ENT_QUOTES, 'UTF-8');
                             $toolNameLower = htmlspecialchars(mb_strtolower($tool['name']), ENT_QUOTES, 'UTF-8');
                             $toolDescLower = htmlspecialchars(mb_strtolower($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8');
+                            $toolTagLower = htmlspecialchars(mb_strtolower($tool['tag_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                            $toolUrlLower = htmlspecialchars(mb_strtolower($safeUrl), ENT_QUOTES, 'UTF-8');
 
                             // Aceita somente a cor hexadecimal gerada pelo seletor do painel.
                             $toolTagColor = validatedColor((string) ($tool['tag_color'] ?? ''), '#6366f1');
@@ -204,13 +230,13 @@ foreach ($tools as $tool) {
                                 ? '#111827'
                                 : '#ffffff';
                         ?>
-                            <a href="<?= $safeUrl ?>" draggable="<?= $isAuthenticated ? 'true' : 'false' ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $safeUrl ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>">
+                            <a href="<?= $safeUrl ?>" draggable="<?= $isAuthenticated ? 'true' : 'false' ?>" class="card tool-card" target="_blank" rel="noopener noreferrer" data-id="<?= $tool['id'] ?>" data-url="<?= $toolUrlLower ?>" data-name="<?= $toolNameLower ?>" data-desc="<?= $toolDescLower ?>" data-tag="<?= $toolTagLower ?>">
                                 <div class="status-badge status-ping">PING...</div>
                                 
                                 <div class="card-top">
                                     <?php $iconPath = resolveIconUrl($tool['icon_url']); if (!empty($iconPath)): ?>
                                         <div class="card-icon-wrapper">
-                                            <img src="<?= $iconPath ?>" alt="" loading="lazy">
+                                            <img src="<?= $iconPath ?>" alt="" loading="lazy" onerror="this.closest('.card-icon-wrapper').style.display='none';">
                                         </div>
                                     <?php endif; ?>
                                     
@@ -289,9 +315,11 @@ foreach ($tools as $tool) {
 
             // 2. Filtro de Busca Instantânea
             const searchInput = document.getElementById('searchInput');
+            const searchClear = document.getElementById('searchClear');
             if (searchInput) {
-                searchInput.addEventListener('input', (e) => {
-                    const query = e.target.value.toLowerCase().trim();
+                const filterCards = (rawQuery) => {
+                    const query = rawQuery.toLowerCase().trim();
+                    if (searchClear) searchClear.hidden = !query;
                     const categoryColumns = document.querySelectorAll('.category-column');
                     
                     let totalVisible = false;
@@ -302,7 +330,9 @@ foreach ($tools as $tool) {
                         toolCards.forEach(card => {
                             const name = card.getAttribute('data-name') || '';
                             const desc = card.getAttribute('data-desc') || '';
-                            if (name.includes(query) || desc.includes(query)) {
+                            const tag = card.getAttribute('data-tag') || '';
+                            const url = card.getAttribute('data-url') || '';
+                            if (name.includes(query) || desc.includes(query) || tag.includes(query) || url.includes(query)) {
                                 card.style.display = 'flex';
                                 hasVisibleCards = true;
                             } else {
@@ -313,11 +343,21 @@ foreach ($tools as $tool) {
                         column.style.display = hasVisibleCards ? 'block' : 'none';
                         totalVisible ||= hasVisibleCards;
                     });
-                    document.getElementById('empty-search').hidden = totalVisible || !query;
-                    document.getElementById('web-search').href = `https://duckduckgo.com/?q=${encodeURIComponent(e.target.value.trim())}`;
-                });
-                
+                    const emptySearch = document.getElementById('empty-search');
+                    if (emptySearch) emptySearch.hidden = totalVisible || !query;
+                    const webSearch = document.getElementById('web-search');
+                    if (webSearch) webSearch.href = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+                };
 
+                searchInput.addEventListener('input', (e) => filterCards(e.target.value));
+
+                if (searchClear) {
+                    searchClear.addEventListener('click', () => {
+                        searchInput.value = '';
+                        filterCards('');
+                        searchInput.focus();
+                    });
+                }
             }
 
             // 3. Checagem em lotes, com cache no servidor para evitar uma requisição por card.

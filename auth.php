@@ -2,7 +2,12 @@
 // ==========================================
 // SEGURANÇA: SESSÃO DINÂMICA E COOKIES HTTPS
 // ==========================================
-$sessionDays = (int) $pdo->query("SELECT session_days FROM settings LIMIT 1")->fetchColumn();
+$sessionDays = (int) ($settings['session_days'] ?? 0);
+if ($sessionDays <= 0) {
+    try {
+        $sessionDays = (int) $pdo->query("SELECT session_days FROM settings LIMIT 1")->fetchColumn();
+    } catch (PDOException $e) {}
+}
 $sessionDays = min(365, max(1, $sessionDays ?: 7));
 $lifetime = $sessionDays * 86400;
 
@@ -171,6 +176,7 @@ header("Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: no-referrer");
+header("X-Robots-Tag: noindex, nofollow, noarchive");
 header("Permissions-Policy: camera=(), microphone=(), geolocation=()");
 if ($isSecure) {
     header("Strict-Transport-Security: max-age=31536000; includeSubDomains");

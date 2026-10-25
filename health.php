@@ -159,7 +159,9 @@ function batchCachedHealth(PDO $pdo, array $tools): array {
         $running = null;
         do {
             $mrc = curl_multi_exec($mh, $running);
-            if ($running) curl_multi_select($mh, 0.1);
+            if ($running && curl_multi_select($mh, 0.1) === -1) {
+                usleep(50000);
+            }
         } while ($running > 0 && $mrc === CURLM_OK);
 
         foreach ($curlHandles as $id => $ch) {

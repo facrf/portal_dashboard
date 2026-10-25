@@ -4,10 +4,14 @@
 // ==========================================
 $langCode = 'pt';
 $allowedLangs = ['pt', 'es', 'en'];
-try {
-    $settingsLang = $pdo->query("SELECT language FROM settings LIMIT 1")->fetchColumn();
-    if ($settingsLang && in_array($settingsLang, $allowedLangs, true)) { $langCode = $settingsLang; }
-} catch (PDOException $e) {}
+if (isset($settings['language']) && in_array($settings['language'], $allowedLangs, true)) {
+    $langCode = $settings['language'];
+} else {
+    try {
+        $settingsLang = $pdo->query("SELECT language FROM settings LIMIT 1")->fetchColumn();
+        if ($settingsLang && in_array($settingsLang, $allowedLangs, true)) { $langCode = $settingsLang; }
+    } catch (PDOException $e) {}
+}
 
 $langCode = basename($langCode);
 $langFile = __DIR__ . "/lang/{$langCode}.php";

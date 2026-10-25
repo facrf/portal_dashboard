@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e2e"/>
+      <stop offset="100%" stop-color="#11111b"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89b4fa"/>
+      <stop offset="50%" stop-color="#cba6f7"/>
+      <stop offset="100%" stop-color="#f38ba8"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <!-- Background with smooth rounded edges -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="112" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>
+  <!-- Glowing Portal Elements -->
+  <g transform="translate(256, 256)" filter="url(#glow)">
+    <!-- Outer concentric dashed orbital ring -->
+    <circle r="160" fill="none" stroke="url(#ringGrad)" stroke-width="6" stroke-dasharray="24 16" opacity="0.65"/>
+    <!-- Middle gateway ring -->
+    <circle r="110" fill="none" stroke="url(#ringGrad)" stroke-width="12" opacity="0.85"/>
+    <!-- Central luminous core -->
+    <circle r="60" fill="url(#ringGrad)" opacity="0.25"/>
+    <circle r="40" fill="url(#ringGrad)"/>
+    <!-- Cardinal node accents -->
+    <circle cx="0" cy="-110" r="14" fill="#89b4fa"/>
+    <circle cx="110" cy="0" r="14" fill="#cba6f7"/>
+    <circle cx="0" cy="110" r="14" fill="#f38ba8"/>
+    <circle cx="-110" cy="0" r="14" fill="#cba6f7"/>
+  </g>
+</svg>

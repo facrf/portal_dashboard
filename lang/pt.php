@@ -184,4 +184,7 @@ return [
     'import_empty' => 'Nenhum serviço válido para importar.',
     'ids_invalid' => 'Lista de serviços inválida.',
     'target_missing' => 'Alvo não cadastrado.',
+    'welcome_title' => 'Bem-vindo ao Portal Dashboard',
+    'welcome_subtitle' => 'Nenhum serviço cadastrado ainda. Comece adicionando seus serviços ou importando um backup.',
+    'clear_search' => 'Limpar busca',
 ];
